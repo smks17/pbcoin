@@ -7,6 +7,10 @@ from enum import IntEnum, auto
 from hashlib import md5
 from socket import *
 
+from pbcoin import BLOCK_CHAIN
+from pbcoin.block import Block
+from pbcoin.mine import Mine
+
 DEFAULT_PORT = 8989
 DEFAULT_HOST = '127.0.0.1'
 
@@ -25,6 +29,11 @@ class ConnectionCode(IntEnum):
     NEW_NEIGHBORS_REQUEST = auto()  # request some new nodes for neighbors
     NEW_NEIGHBORS_FIND = auto()  # declare find new neighbors ()
     NOT_NEIGHBOR = auto()  # not be neighbors anymore!
+    MINED_BLOCK = auto()  # declare other nodes find a new block
+    RESOLVE_BLOCKCHAIN = auto()
+    GET_BLOCKS = auto()
+    SEND_BLOCKS = auto()
+    OK_BLOCK = auto()
 
 class Node:
     def __init__(self, ip, port):
@@ -87,7 +96,8 @@ class Node:
         log.debug(f'receive data: {data.decode()}')
         data = json.loads(data.decode())
 
-        assert len(ConnectionCode) == 4, "some requests are not implemented yet!"
+        #TODO
+        assert len(ConnectionCode) == 8, "some requests are not implemented yet!"
         type = data['type']
         if type == ConnectionCode.NEW_NEIGHBOR:
             await self.handleNewNeighbor(data)
@@ -98,6 +108,12 @@ class Node:
             log.warn("bad request for find new node")
         elif type == ConnectionCode.NOT_NEIGHBOR:
             await self.handleNotNeighbor(data, writer)
+        elif type == ConnectionCode.MINED_BLOCK:
+            await self.handleMinedBlock(data, reader, writer)
+        elif type == ConnectionCode.GET_BLOCKS:
+            await self.handleGetBlock(data, writer)
+        elif type == ConnectionCode.OK_BLOCK:
+            await self.confirmMinedBlock(data)
         else:
             raise NotImplementedError
         writer.close()
@@ -118,7 +134,7 @@ class Node:
             "status": True,
             "uid": self.uid,
             "type": ConnectionCode.NEW_NEIGHBORS_REQUEST,
-            "src_ip": self.ip,
+            "src_ip": f'{self.ip}:{self.port}',
             "dst_ip": data["src_ip"],
             "number_connections_requests": n_connections,
             "p2p_nodes": data["p2p_nodes"],
@@ -133,7 +149,7 @@ class Node:
                 addr_msg = final_req.copy()
             else:
                 addr_msg = data.copy()
-            addr_msg['src_ip'] = self.ip
+            addr_msg['src_ip'] = f'{self.ip}:{self.port}'
             for uid in list(self.neighbors):
                 addr = self.neighbors.get(uid)
                 if addr == None:
@@ -161,7 +177,7 @@ class Node:
                     "status": True,
                     "type": ConnectionCode.NOT_NEIGHBOR,
                     "dst_ip": ip,
-                    "src_ip": self.ip,
+                    "src_ip": f'{self.ip}:{self.port}',
                     "uid": self.uid
                 }
                 response = await self.connectAndSend(ip, port, json.dumps(request))
@@ -175,7 +191,7 @@ class Node:
                     break
 
         if final_req != None:
-            final_req['src_ip'] = self.ip
+            final_req['src_ip'] = f'{self.ip}:{self.port}'
             final_req['type'] = ConnectionCode.NEW_NEIGHBORS_FIND
             if final_req['number_connections_requests'] == 0:
                 final_req['status'] = True
@@ -189,12 +205,12 @@ class Node:
 
     async def handleNotNeighbor(self, data, writer):
         """ delete neighbor """
-        ip = data["src_ip"]
+        ip, port = data["src_ip"].split(':')
         uid = data["uid"]
         data = {
             "status": False,
             "dst_ip": ip,
-            "src_ip": self.ip,
+            "src_ip": f'{self.ip}:{self.port}',
         }
         if len(self.neighbors) == TOTAL_NUMBER_CONNECTIONS:
             self.neighbors.pop(uid, None)
@@ -202,6 +218,58 @@ class Node:
             data['status'] = True
         writer.write(bytes(sizeof(data).encode()))
         writer.write(bytes(json.dumps(data).encode()))
+
+    async def handleMinedBlock(self, data):
+        """ handle for request finder new block"""
+        blockData = data['block']
+        block : Block = Block.fromJsonDataFull(blockData)
+        if block.blocHeight > BLOCK_CHAIN.height:
+            number_new_blocks = block.blocHeight - BLOCK_CHAIN.height
+            if number_new_blocks == 1:
+                # just this block is new
+                validation = BLOCK_CHAIN.addNewBlock(block)
+                if validation != None:
+                    # TODO: send why receive data is a bad request
+                    log.error(f"bad request mined block from {data['src_ip']}")
+                    pass
+            else:
+                # request for get n block before this block for add to its blockchain
+                request = {
+                    "type": ConnectionCode.GET_BLOCKS,
+                    "src_ip": f'{self.ip}:{self.port}',
+                    "dst_ip": data['src_ip'],
+                    "number_block": number_new_blocks
+                }
+                ip, port = data['src_ip'].split(':')
+                res = await self.connectAndSend(ip, int(port), request)
+                if res['status']:
+                    blocks = res['blocks']
+                    blocks = [Block.fromJsonDataFull(block) for block in blocks]
+                    BLOCK_CHAIN.resolve(blocks)
+                    Mine.start_over = True
+                else:
+                    # TODO
+                    log.error("Bad request send for get blocks")
+        else:
+            # TODO: current blockchain is longer so declare other for resolve that
+            pass
+
+    async def handleGetBlock(self, data, writer):
+        hash_block = data['hash_block']
+        index = BLOCK_CHAIN.findHash(hash_block)
+        if index == None:
+            # doesn't have this specific chain
+            log.error("doesn't have self chain!")
+        else:
+            request = {
+                "status": True,
+                "type": ConnectionCode.SEND_BLOCKS,
+                "src_ip": f'{self.ip}:{self.port}',
+                "dst_ip": data['src_ip'],
+                "blocks": BLOCK_CHAIN.getData()
+            }
+            writer.write(sizeof(request).encode())
+            writer.write(json.dumps(request).encode())
 
     async def startUp(self, seeds: list[str]):
         nodes = []
@@ -212,7 +280,7 @@ class Node:
                 "status": True,
                 "uid": self.uid,
                 "type": ConnectionCode.NEW_NEIGHBORS_REQUEST,
-                "src_ip": self.ip,
+                "src_ip": f'{self.ip}:{self.port}',
                 "dst_ip": seed,
                 "number_connections_requests": TOTAL_NUMBER_CONNECTIONS,
                 "p2p_nodes": [],
@@ -237,7 +305,7 @@ class Node:
                 "status": True,
                 "uid": self.uid,
                 "type": ConnectionCode.NEW_NEIGHBOR,
-                "src_ip": self.ip,
+                "src_ip": f'{self.ip}:{self.port}',
                 "dst_ip": node,
                 "new_node": f"{self.ip}:{self.port}"
             }
@@ -246,6 +314,18 @@ class Node:
             writer.write(bytes(json.dumps(request).encode()))
             self.neighbors[self.calculate_uid(ip, str(port))] = (ip, port)
             log.info(f"new neighbors for {self.ip} : {ip}")
+
+    async def sendMinedBlock(self, _block: Block):
+        data = {
+            "src_ip": f'{self.ip}:{self.port}',
+            "dst_ip": '',
+            "block": _block.getData()
+        }
+        for uid in self.neighbors:
+            ip, port = self.neighbors[uid]
+            port = int(port)
+            data['dst_ip'] = ip
+            asyncio.create_task(self.connectAndSend(ip, port, json.dumps(data)))
 
     @staticmethod
     def calculate_uid(ip, port):
