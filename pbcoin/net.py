@@ -7,9 +7,9 @@ from enum import IntEnum, auto
 from hashlib import md5
 from socket import *
 
-from pbcoin import BLOCK_CHAIN
-from pbcoin.block import Block
-from pbcoin.mine import Mine
+import pbcoin
+import pbcoin.block as pbblock
+import pbcoin.mine as mine
 
 DEFAULT_PORT = 8989
 DEFAULT_HOST = '127.0.0.1'
@@ -33,7 +33,6 @@ class ConnectionCode(IntEnum):
     RESOLVE_BLOCKCHAIN = auto()
     GET_BLOCKS = auto()
     SEND_BLOCKS = auto()
-    OK_BLOCK = auto()
 
 class Node:
     def __init__(self, ip, port):
@@ -49,13 +48,14 @@ class Node:
     async def connectTo(self, dst_ip, dst_port):
         try:
             reader, writer = await asyncio.open_connection(dst_ip, int(dst_port))
-            log.info(f"from {self.ip} Connect to {dst_ip}:{dst_port}")
+            log.debug(f"from {self.ip} Connect to {dst_ip}:{dst_port}")
         except ConnectionError:
             log.error("Error Connection", exc_info=True)
             raise ConnectionError
         return reader, writer
 
-    async def connectAndSend(self, dst_ip: str, dst_port: int, data: str):
+    async def connectAndSend(self, dst_ip: str, dst_port: int, data: str, wait_for_receive = True):
+        rec_data = b''
         try:
             reader, writer = await self.connectTo(dst_ip, dst_port)
             writer.write(bytes(sizeof(data).encode()))
@@ -63,8 +63,9 @@ class Node:
             await writer.drain()
             size_data = int(await reader.read(MAX_BYTE_SIZE))
             size_data = int(size_data)
-            rec_data = await reader.read(size_data)
-            log.debug(f'receive data from {dst_ip}:{dst_port} {rec_data.decode()}')
+            if wait_for_receive:
+                rec_data = await reader.read(size_data)
+                log.debug(f'receive data from {dst_ip}:{dst_port} {rec_data.decode()}')
             writer.close()
             await writer.wait_closed()
         except ConnectionError:
@@ -109,11 +110,9 @@ class Node:
         elif type == ConnectionCode.NOT_NEIGHBOR:
             await self.handleNotNeighbor(data, writer)
         elif type == ConnectionCode.MINED_BLOCK:
-            await self.handleMinedBlock(data, reader, writer)
+            await self.handleMinedBlock(data)
         elif type == ConnectionCode.GET_BLOCKS:
             await self.handleGetBlock(data, writer)
-        elif type == ConnectionCode.OK_BLOCK:
-            await self.confirmMinedBlock(data)
         else:
             raise NotImplementedError
         writer.close()
@@ -203,7 +202,7 @@ class Node:
         writer.write(bytes(sizeof(final_req).encode()))
         writer.write(bytes(json.dumps(final_req).encode()))
 
-    async def handleNotNeighbor(self, data, writer):
+    async def handleNotNeighbor(self, data: dict[str, any], writer: asyncio.StreamWriter):
         """ delete neighbor """
         ip, port = data["src_ip"].split(':')
         uid = data["uid"]
@@ -219,15 +218,17 @@ class Node:
         writer.write(bytes(sizeof(data).encode()))
         writer.write(bytes(json.dumps(data).encode()))
 
-    async def handleMinedBlock(self, data):
+    async def handleMinedBlock(self, data: dict[str, any]):
         """ handle for request finder new block"""
         blockData = data['block']
-        block : Block = Block.fromJsonDataFull(blockData)
-        if block.blocHeight > BLOCK_CHAIN.height:
-            number_new_blocks = block.blocHeight - BLOCK_CHAIN.height
+        log.info(f"mine block from {data['src_ip']}: {blockData}")
+        block = pbblock.Block.fromJsonDataFull(blockData)
+        if block.blocHeight > pbcoin.BLOCK_CHAIN.height:
+            number_new_blocks = block.blocHeight - pbcoin.BLOCK_CHAIN.height
             if number_new_blocks == 1:
                 # just this block is new
-                validation = BLOCK_CHAIN.addNewBlock(block)
+                validation = pbcoin.BLOCK_CHAIN.addNewBlock(block)
+                log.debug(f"validation {validation} for {block.__hash__}")
                 if validation != None:
                     # TODO: send why receive data is a bad request
                     log.error(f"bad request mined block from {data['src_ip']}")
@@ -244,19 +245,21 @@ class Node:
                 res = await self.connectAndSend(ip, int(port), request)
                 if res['status']:
                     blocks = res['blocks']
-                    blocks = [Block.fromJsonDataFull(block) for block in blocks]
-                    BLOCK_CHAIN.resolve(blocks)
-                    Mine.start_over = True
+                    blocks = [pbblock.Block.fromJsonDataFull(block) for block in blocks]
+                    pbcoin.BLOCK_CHAIN.resolve(blocks)
+                    mine.Mine.start_over = True
                 else:
                     # TODO
                     log.error("Bad request send for get blocks")
         else:
             # TODO: current blockchain is longer so declare other for resolve that
             pass
+        
+        log.debug(f"new block chian: {pbcoin.BLOCK_CHAIN.getHashes()}")
 
-    async def handleGetBlock(self, data, writer):
+    async def handleGetBlock(self, data: dict[str, any], writer: asyncio.StreamWriter):
         hash_block = data['hash_block']
-        index = BLOCK_CHAIN.findHash(hash_block)
+        index = pbcoin.BLOCK_CHAIN.search(hash_block)
         if index == None:
             # doesn't have this specific chain
             log.error("doesn't have self chain!")
@@ -266,12 +269,13 @@ class Node:
                 "type": ConnectionCode.SEND_BLOCKS,
                 "src_ip": f'{self.ip}:{self.port}',
                 "dst_ip": data['src_ip'],
-                "blocks": BLOCK_CHAIN.getData()
+                "blocks": pbcoin.BLOCK_CHAIN.getData()
             }
             writer.write(sizeof(request).encode())
             writer.write(json.dumps(request).encode())
 
     async def startUp(self, seeds: list[str]):
+        """ begin to find new neighbors and connect to network"""
         nodes = []
         for seed in seeds:
             ip, port = seed.split(':')
@@ -288,7 +292,7 @@ class Node:
             }
             data = json.dumps(request)
             response = await self.connectAndSend(ip, port, data)
-            log.debug(f'receive message from {ip}:{port}: {response.decode()}')
+            log.debug(f'receive data: {response.decode()}')
             response = json.loads(response.decode())
 
             nodes += response['p2p_nodes']
@@ -315,8 +319,10 @@ class Node:
             self.neighbors[self.calculate_uid(ip, str(port))] = (ip, port)
             log.info(f"new neighbors for {self.ip} : {ip}")
 
-    async def sendMinedBlock(self, _block: Block):
+    async def sendMinedBlock(self, _block: pbblock.Block):
+        """ declare other nodes for find new block """
         data = {
+            "type": ConnectionCode.MINED_BLOCK,
             "src_ip": f'{self.ip}:{self.port}',
             "dst_ip": '',
             "block": _block.getData()
@@ -325,7 +331,7 @@ class Node:
             ip, port = self.neighbors[uid]
             port = int(port)
             data['dst_ip'] = ip
-            asyncio.create_task(self.connectAndSend(ip, port, json.dumps(data)))
+            await self.connectAndSend(ip, port, json.dumps(data), False)
 
     @staticmethod
     def calculate_uid(ip, port):

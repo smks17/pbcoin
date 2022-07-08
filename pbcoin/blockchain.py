@@ -1,8 +1,10 @@
 from functools import reduce
 from enum import Flag, auto
+import logging
 from operator import or_ as _or_
 
 from pbcoin.block import Block
+import pbcoin
 
 class BlockValidationLevel(Flag):
     Bad = 0
@@ -12,9 +14,10 @@ class BlockValidationLevel(Flag):
 
     @classmethod
     def ALL(cls):
+        """ get variable with all flag for checking validation """
         cls_name = cls.__name__
         if not len(cls):
-            raise AttributeError('empty %s does not have an ALL value' % cls_name)
+            raise AttributeError(f'empty {cls_name} does not have an ALL value')
         value = cls(reduce(_or_, cls))
         cls._member_map_['ALL'] = value
         return value
@@ -30,7 +33,8 @@ class BlockChain:
             preHash = ""
         else:
             preHash = self.last_block.__hash__
-        block = Block(preHash, self.height + 1)
+        height = self.height
+        block = Block(preHash, height + 1)
         return block
 
     def addNewBlock(self, _block: Block):
@@ -41,7 +45,7 @@ class BlockChain:
             return validation
 
     def resolve(self, new_blocks: list[Block]):
-        if not BlockChain.validHashChain(new_blocks):
+        if not BlockChain.isValidHashChain(new_blocks):
             return Exception
         
         for i in range(len(self.blocks)-1, -1, -1):
@@ -57,28 +61,41 @@ class BlockChain:
 
     def isValidBlock(self, _block: Block):
         valid = BlockValidationLevel.Bad
-        from pbcoin import DIFFICULTY
-        if int(_block.__hash__, 16) <= DIFFICULTY:
-            valid |= BlockValidationLevel.DIFFICULTY
-        valid |= BlockValidationLevel.TRX # TODO: check all trx
-        if _block.previousHash == self.last_block.previousHash:
-            valid |= BlockValidationLevel.PREVIOUS_HASH
+        if int(_block.__hash__, 16) <= pbcoin.DIFFICULTY:
+            valid = valid | BlockValidationLevel.DIFFICULTY
+        valid = valid | BlockValidationLevel.TRX # TODO: check all trx
+        last_block = self.last_block
+        if last_block:
+            logging.debug(_block.previousHash)
+            if _block.previousHash == last_block.previousHash:
+                valid = valid | BlockValidationLevel.PREVIOUS_HASH
+        else:
+            logging.debug(_block.previousHash)
+            if _block.previousHash == '':
+                valid = valid | BlockValidationLevel.PREVIOUS_HASH
+
         return valid
 
-    def findHash(self, key_hash):
+    def search(self, key_hash):
         """ search from last block to first for find block with key_hash """
         for i in range(len(self.blocks)-1, -1, -1):
             if self.blocks[i].__hash__ == key_hash:
                 return i
         return None
 
-    def getData(self, first_index, last_index = None):
+    def getData(self, first_index = 0, last_index = None):
         if last_index == None:
             last_index = len(self.blocks)
-        return [block.getData() for block in self.blocks[first_index, last_index]]
+        return [block.getData() for block in self.blocks[first_index : last_index]]
+
+    def getHashes(self, first_index = 0, last_index = None):
+        if last_index == None:
+            last_index = len(self.blocks)
+        if len(self.blocks) == 0: return [self.blocks[0].__hash__]
+        return [block.__hash__ for block in self.blocks[first_index : last_index]]
 
     @staticmethod
-    def validHashChain(_chain: list[Block]):
+    def isValidHashChain(_chain: list[Block]):
         for i in range(1, len(_chain)):
             if _chain[i].__hash__ != _chain[i-1].__hash__:
                 return False
@@ -86,10 +103,12 @@ class BlockChain:
 
     @property
     def last_block(self):
+        if len(self.blocks) == 0:
+            return None
         return self.blocks[-1]
 
     @property
     def height(self):
         if len(self.blocks) == 0:
             return 0
-        return self.last_block.blockHeight
+        return self.last_block.blocHeight

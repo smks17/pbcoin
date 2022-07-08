@@ -15,12 +15,12 @@ class Block:
     is_mined = False
     blocHeight: int
     trxHashes: list[str]  # using for header block
-    rootHashMerkleTree: str
+    rootHashMerkleTree: MerkleTree = None
 
     def __init__(self, preHash: str, blockHeight: int):
         self.previousHash = preHash
         subsidy = Trx()
-        self.trxList[subsidy]
+        self.trxList = [subsidy]
         self.nonce = 0
         self.blocHeight = blockHeight
 
@@ -32,8 +32,7 @@ class Block:
         return [trx.hashTrx for trx in self.trxList]
 
     def setRootHashMerkleTree(self):
-        self.rootHashMerkleTree = MerkleTree.buildMerkleTree(
-            self.getListHashesTrx())
+        self.rootHashMerkleTree = MerkleTree.buildMerkleTree(self.getListHashesTrx())
 
     def setMined(self):
         self.time = datetime.utcnow().timestamp()
@@ -42,9 +41,11 @@ class Block:
     def setNonce(self, _nonce: int): self.nonce = _nonce
 
     def calculateHash(self):
+        if not self.rootHashMerkleTree:
+            self.setRootHashMerkleTree()
         nonceHash = sha512(str(self.nonce).encode()).hexdigest()
         calculatedHash = sha512(
-            (self.rootHashMerkleTree + nonceHash + self.previousHash).encode()).hexdigest()
+            (self.rootHashMerkleTree.hash + nonceHash + self.previousHash).encode()).hexdigest()
         self.blockHash = calculatedHash
         return calculatedHash
 
@@ -54,7 +55,7 @@ class Block:
             "height": self.blocHeight,
             "nonce": self.nonce,
             "number_trx": len(self.trxList),
-            "merkle_root": self.rootHashMerkleTree,
+            "merkle_root": self.rootHashMerkleTree.hash,
             "trx_hashes": self.getListHashesTrx(),
             "previous_hash": self.previousHash,
             "time": self.time if is_POSIX_timestamp else datetime.fromtimestamp(self.time)
@@ -67,9 +68,9 @@ class Block:
                 "header": blockHeader
             }
             data['size'] = getsizeof(data)
-        return json.dumps(data)
+        return data
 
-    @property
+    @staticmethod
     def fromJsonDataHeader(_data: dict['str', any], is_POSIX_timestamp = True):
         new_block = Block(_data['previous_hash'], _data['height'])
         new_block.blockHash = _data['hash']
@@ -82,10 +83,9 @@ class Block:
             datetime.fromisoformat(_data['time'])
         return new_block
 
-    @property
+    @staticmethod
     def fromJsonDataFull(_data: dict['str', any], is_POSIX_timestamp = True):
-        new_block = Block.fromJsonDataHeader(
-            _data['header'], is_POSIX_timestamp)
+        new_block = Block.fromJsonDataHeader(_data['header'], is_POSIX_timestamp)
         trx = _data['trx']
         for eachTrx in trx:
             Trx(sender = eachTrx['sender'],

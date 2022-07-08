@@ -1,5 +1,6 @@
 import math
 from hashlib import sha256
+import queue
 
 class MerkleTree:
     def __init__(self, _hash = ''):

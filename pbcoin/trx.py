@@ -2,6 +2,8 @@ from datetime import datetime
 from hashlib import sha512
 import json
 
+import pbcoin
+
 DEFAULT_SUBSIDY = 50
 
 class Trx:
@@ -14,10 +16,10 @@ class Trx:
         if len(kwargs) == 0:
             # this is subsidy trx
             self.sender = ""
-            self.recipient = "self" # TODO: get address key
+            self.recipient = pbcoin.addrKey.compressedPublic # TODO: get address key
             self.amount = DEFAULT_SUBSIDY
             self.time = datetime.utcnow().timestamp()
-        elif len(kwargs) == 3:
+        elif len(kwargs) >= 3:
             self.sender = kwargs['sender']
             self.recipient = kwargs['recipient']
             self.amount = kwargs['amount']
@@ -28,14 +30,14 @@ class Trx:
         else:
             assert (False, "Bad usage")
 
-        self.hashTrx = self.__hash__()
+        self.hashTrx = self.__hash__
     
     def calculateHash(self):
         calHash = sha512(self.__str__()).hexdigest()
         self.blockHash = calHash
         return calHash
 
-    def getData(self, with_hash: False, is_POSIX_timestamp = True):
+    def getData(self, with_hash = False, is_POSIX_timestamp = True):
         data = {
             'sender': self.sender,
             'recipient': self.recipient,
@@ -44,7 +46,7 @@ class Trx:
         }
         if with_hash:
             data['hash'] = self.hashTrx
-        return json.dumps(data)
+        return data
 
     @property
     def __hash__(self) -> str:

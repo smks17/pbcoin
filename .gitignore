@@ -15,4 +15,6 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+*.log
+
 .vscode/

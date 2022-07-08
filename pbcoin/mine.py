@@ -1,5 +1,5 @@
-from pbcoin import BLOCK_CHAIN, DIFFICULTY, NETWORK
-from pbcoin.block import Block
+import logging
+import pbcoin
 
 class Mine:
     start_over = False # if true mining stop and then start over from last block
@@ -7,15 +7,16 @@ class Mine:
 
     @classmethod
     async def start(cls):
-        block = BLOCK_CHAIN.setupNewBlock()
+        block = pbcoin.BLOCK_CHAIN.setupNewBlock()
         cls.mined_new = False
         while(not cls.start_over):
-            if int(block.calculateHash(), 16) <= DIFFICULTY:
+            if int(block.calculateHash(), 16) <= pbcoin.DIFFICULTY:
                 if cls.start_over:
                     break
+                block.setMined()
                 cls.mined_new = True
                 break
             block.setNonce(block.nonce+1)
-        
-        await NETWORK.sendMinedBlock(block)
-        BLOCK_CHAIN.addNewBlock(block)
+        logging.info(f"mined a block: {block.__hash__}")
+        await pbcoin.NETWORK.sendMinedBlock(block)
+        pbcoin.BLOCK_CHAIN.addNewBlock(block)
