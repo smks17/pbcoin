@@ -27,16 +27,15 @@ class MerkleTree:
     def buildMerkleTree(_values: list[str]):
         """make merkle tree from _values that are hashes of trx"""
         values = _values.copy()
-        if len(values) % 2 != 0:
-            values.append(values[-1])
         q = queue.Queue(len(values))
         for h in values:
             q.put(MerkleTree(h))
         while q.qsize() > 1:
             q_size = q.qsize()
+            is_odd = False
             if q_size != 0 and q_size % 2 != 0:
-                q.put(q.queue[q.qsize() - 1])
-            for _ in range(q.qsize() // 2):
+                is_odd = True
+            for i in range(q_size // 2):
                 left = q.get()
                 right = q.get()
                 parent = MerkleTree()
@@ -46,6 +45,9 @@ class MerkleTree:
                 parent.right = right
                 parent.depth += left.depth
                 q.put(parent)
+            # handle odd number
+            if is_odd:
+                q.put(q.get())
 
         root = q.get()
         root.computeHash()
@@ -118,7 +120,7 @@ class MerkleTree:
                 return the rebuilt Merkle tree is not complete
 
         """
-        max_depth = math.ceil(math.log2(7))
+        max_depth = math.ceil(math.log2(len(_hashes)))
         def construct(depth: int):
             bit = bits.pop()
             node = None
