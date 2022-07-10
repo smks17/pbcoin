@@ -222,16 +222,16 @@ class Node:
 
     async def handleMinedBlock(self, data: dict[str, any]):
         """ handle for request finder new block"""
+        mine.Mine.stop_mining = True
         blockData = data['block']
         log.info(f"mine block from {data['src_ip']}: {blockData}")
-        block = pbblock.Block.fromJsonDataFull(blockData)
+        block = pbBlock.Block.fromJsonDataFull(blockData)
         if block.blocHeight > pbcoin.BLOCK_CHAIN.height:
             number_new_blocks = block.blocHeight - pbcoin.BLOCK_CHAIN.height
             if number_new_blocks == 1:
                 # just this block is new
-                validation = pbcoin.BLOCK_CHAIN.addNewBlock(block)
-                log.debug(f"validation {validation} for {block.__hash__}")
-                if validation != None:
+                done = pbcoin.BLOCK_CHAIN.addNewBlock(block)
+                if done != None:
                     # TODO: send why receive data is a bad request
                     log.error(f"bad request mined block from {data['src_ip']}")
                     pass
@@ -259,6 +259,7 @@ class Node:
             pass
         
         log.debug(f"new block chian: {pbcoin.BLOCK_CHAIN.getHashes()}")
+        mine.Mine.start_over = True
 
     async def handleGetBlock(self, data: dict[str, any], writer: asyncio.StreamWriter):
         hash_block = data['hash_block']
