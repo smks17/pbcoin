@@ -61,9 +61,9 @@ class Node:
             writer.write(bytes(sizeof(data).encode()))
             writer.write(bytes(data.encode()))
             await writer.drain()
-            size_data = int(await reader.read(MAX_BYTE_SIZE))
-            size_data = int(size_data)
             if wait_for_receive:
+                size_data = await reader.read(MAX_BYTE_SIZE)
+            size_data = int(size_data)
                 rec_data = await reader.read(size_data)
                 log.debug(f'receive data from {dst_ip}:{dst_port} {rec_data.decode()}')
             writer.close()
@@ -199,8 +199,9 @@ class Node:
         else:
             raise NotImplementedError
 
-        writer.write(bytes(sizeof(final_req).encode()))
-        writer.write(bytes(json.dumps(final_req).encode()))
+        bytes_data = json.dumps(final_req).encode()
+        writer.write(sizeof(bytes_data).encode())
+        writer.write(bytes_data)
 
     async def handleNotNeighbor(self, data: dict[str, any], writer: asyncio.StreamWriter):
         """ delete neighbor """
@@ -215,8 +216,9 @@ class Node:
             self.neighbors.pop(uid, None)
             log.info(f"delete neighbor for {self.ip} : {ip}")
             data['status'] = True
-        writer.write(bytes(sizeof(data).encode()))
-        writer.write(bytes(json.dumps(data).encode()))
+        bytes_data = json.dumps(data).encode()
+        writer.write(sizeof(bytes_data).encode())
+        writer.write(bytes_data)
 
     async def handleMinedBlock(self, data: dict[str, any]):
         """ handle for request finder new block"""
@@ -242,7 +244,8 @@ class Node:
                     "number_block": number_new_blocks
                 }
                 ip, port = data['src_ip'].split(':')
-                res = await self.connectAndSend(ip, int(port), request)
+                res = await self.connectAndSend(ip, int(port), json.dumps(request))
+                res = json.loads(res.decode())
                 if res['status']:
                     blocks = res['blocks']
                     blocks = [pbblock.Block.fromJsonDataFull(block) for block in blocks]
@@ -271,8 +274,9 @@ class Node:
                 "dst_ip": data['src_ip'],
                 "blocks": pbcoin.BLOCK_CHAIN.getData()
             }
-            writer.write(sizeof(request).encode())
-            writer.write(json.dumps(request).encode())
+            bytes_data = json.dumps(request).encode()
+            writer.write(sizeof(bytes_data).encode())
+            writer.write(bytes_data)
 
     async def startUp(self, seeds: list[str]):
         """ begin to find new neighbors and connect to network"""
@@ -313,9 +317,7 @@ class Node:
                 "dst_ip": node,
                 "new_node": f"{self.ip}:{self.port}"
             }
-            reader, writer = await self.connectTo(ip, port)
-            writer.write(bytes(sizeof(request).encode()))
-            writer.write(bytes(json.dumps(request).encode()))
+            await self.connectAndSend(ip, port, json.dumps(request), False)
             self.neighbors[self.calculate_uid(ip, str(port))] = (ip, port)
             log.info(f"new neighbors for {self.ip} : {ip}")
 
