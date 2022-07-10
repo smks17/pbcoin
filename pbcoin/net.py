@@ -1,4 +1,5 @@
 import asyncio
+from copy import copy
 import json
 import logging
 from sys import getsizeof
@@ -8,7 +9,8 @@ from hashlib import md5
 from socket import *
 
 import pbcoin
-import pbcoin.block as pbblock
+import pbcoin.block as pbBlock
+import pbcoin.blockchain as pbBlockchain
 import pbcoin.mine as mine
 
 DEFAULT_PORT = 8989
@@ -63,7 +65,7 @@ class Node:
             await writer.drain()
             if wait_for_receive:
                 size_data = await reader.read(MAX_BYTE_SIZE)
-            size_data = int(size_data)
+                size_data = int(size_data)
                 rec_data = await reader.read(size_data)
                 log.debug(f'receive data from {dst_ip}:{dst_port} {rec_data.decode()}')
             writer.close()
@@ -99,20 +101,25 @@ class Node:
 
         #TODO
         assert len(ConnectionCode) == 8, "some requests are not implemented yet!"
-        type = data['type']
-        if type == ConnectionCode.NEW_NEIGHBOR:
+        _type = data['type']
+        if _type == ConnectionCode.NEW_NEIGHBOR:
             await self.handleNewNeighbor(data)
-        elif type == ConnectionCode.NEW_NEIGHBORS_REQUEST:
+        elif _type == ConnectionCode.NEW_NEIGHBORS_REQUEST:
             await self.handleRequestNewNode(data, reader, writer)
-        elif type == ConnectionCode.NEW_NEIGHBORS_FIND:
+        elif _type == ConnectionCode.NEW_NEIGHBORS_FIND:
             # TODO: this type implemented in startup
             log.warn("bad request for find new node")
-        elif type == ConnectionCode.NOT_NEIGHBOR:
+        elif _type == ConnectionCode.NOT_NEIGHBOR:
             await self.handleNotNeighbor(data, writer)
-        elif type == ConnectionCode.MINED_BLOCK:
+        elif _type == ConnectionCode.MINED_BLOCK:
             await self.handleMinedBlock(data)
-        elif type == ConnectionCode.GET_BLOCKS:
+        elif _type == ConnectionCode.GET_BLOCKS:
             await self.handleGetBlock(data, writer)
+        elif _type == ConnectionCode.GetNewBlockChain:
+            await self.handleBlockchainRequest(data, writer)
+        elif _type == ConnectionCode.RESOLVE_BLOCKCHAIN:
+            # TODO:
+            assert False, "Not implemented yet"
         else:
             raise NotImplementedError
         writer.close()
@@ -143,6 +150,7 @@ class Node:
             n_connections -= 1
             final_req["number_connections_requests"] = n_connections
             final_req["p2p_nodes"].append(f"{self.ip}:{self.port}")
+        # still need new neighbors
         if n_connections != 0:
             if final_req != None:
                 addr_msg = final_req.copy()
@@ -167,6 +175,8 @@ class Node:
                 if n_connections == 0:
                     break
 
+        # resolve connections if can not find any neighbors for it
+        # deleted own neighbors then we have 2 free place for neighbors
         if n_connections == TOTAL_NUMBER_CONNECTIONS and len(self.neighbors) == TOTAL_NUMBER_CONNECTIONS:
             neighbors_uid = list(self.neighbors.keys())
             shuffle(neighbors_uid)
@@ -248,7 +258,7 @@ class Node:
                 res = json.loads(res.decode())
                 if res['status']:
                     blocks = res['blocks']
-                    blocks = [pbblock.Block.fromJsonDataFull(block) for block in blocks]
+                    blocks = [pbBlock.Block.fromJsonDataFull(block) for block in blocks]
                     pbcoin.BLOCK_CHAIN.resolve(blocks)
                     mine.Mine.start_over = True
                 else:
@@ -262,9 +272,14 @@ class Node:
         mine.Mine.start_over = True
 
     async def handleGetBlock(self, data: dict[str, any], writer: asyncio.StreamWriter):
-        hash_block = data['hash_block']
-        index = pbcoin.BLOCK_CHAIN.search(hash_block)
-        if index == None:
+        copy_blockchain = copy(pbcoin.BLOCK_CHAIN)
+        first_index = None
+        hash_block = data.pop('hash_block', None)
+        if hash_block:
+            first_index = copy_blockchain.search(hash_block)
+        else:
+            first_index = data.pop('first_index', None)
+        if first_index == None:
             # doesn't have this specific chain
             log.error("doesn't have self chain!")
         else:
@@ -273,7 +288,7 @@ class Node:
                 "type": ConnectionCode.SEND_BLOCKS,
                 "src_ip": f'{self.ip}:{self.port}',
                 "dst_ip": data['src_ip'],
-                "blocks": pbcoin.BLOCK_CHAIN.getData()
+                "blocks": copy_blockchain.getData(first_index)
             }
             bytes_data = json.dumps(request).encode()
             writer.write(sizeof(bytes_data).encode())
@@ -297,7 +312,6 @@ class Node:
             }
             data = json.dumps(request)
             response = await self.connectAndSend(ip, port, data)
-            log.debug(f'receive data: {response.decode()}')
             response = json.loads(response.decode())
 
             nodes += response['p2p_nodes']
@@ -322,7 +336,24 @@ class Node:
             self.neighbors[self.calculate_uid(ip, str(port))] = (ip, port)
             log.info(f"new neighbors for {self.ip} : {ip}")
 
-    async def sendMinedBlock(self, _block: pbblock.Block):
+            # get block chain from other
+            request_blockchain = {
+                "type": ConnectionCode.GET_BLOCKS,
+                "src_ip": f'{self.ip}:{self.port}',
+                "dst_ip": node,
+                'first_index': 0 # whole blockchain
+            }
+            rec = await self.connectAndSend(ip, port, json.dumps(request_blockchain))
+            rec = json.loads(rec.decode())
+            if rec['status']:
+                blockchain = pbBlockchain.BlockChain.jsonToBlockchain(rec['blocks'])
+                if pbcoin.BLOCK_CHAIN.height < blockchain.height:
+                    pbcoin.BlockChain = blockchain
+            else:
+                raise NotImplementedError()
+            log.debug(f"blockchain: {rec}")
+
+    async def sendMinedBlock(self, _block: pbBlock.Block):
         """ declare other nodes for find new block """
         data = {
             "type": ConnectionCode.MINED_BLOCK,

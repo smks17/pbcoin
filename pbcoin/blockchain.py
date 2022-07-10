@@ -24,8 +24,8 @@ class BlockValidationLevel(Flag):
 
 class BlockChain:
     blocks : list[Block]
-    def __init__(self):
-        self.blocks = []
+    def __init__(self, _blockchain = []):
+        self.blocks = _blockchain
 
     def setupNewBlock(self):
         if len(self.blocks) == 0:
@@ -41,6 +41,7 @@ class BlockChain:
         validation = self.isValidBlock(_block)
         if validation == BlockValidationLevel.ALL():
             self.blocks.append(_block)
+            logging.debug(f"new blockchain: {pbcoin.BLOCK_CHAIN.getHashes()}")
         else:
             return validation
 
@@ -66,11 +67,9 @@ class BlockChain:
         valid = valid | BlockValidationLevel.TRX # TODO: check all trx
         last_block = self.last_block
         if last_block:
-            logging.debug(_block.previousHash)
-            if _block.previousHash == last_block.previousHash:
+            if _block.previousHash == last_block.__hash__:
                 valid = valid | BlockValidationLevel.PREVIOUS_HASH
         else:
-            logging.debug(_block.previousHash)
             if _block.previousHash == '':
                 valid = valid | BlockValidationLevel.PREVIOUS_HASH
 
@@ -91,8 +90,13 @@ class BlockChain:
     def getHashes(self, first_index = 0, last_index = None):
         if last_index == None:
             last_index = len(self.blocks)
-        if len(self.blocks) == 0: return [self.blocks[0].__hash__]
+        if len(self.blocks) == 0: return ''
         return [block.__hash__ for block in self.blocks[first_index : last_index]]
+
+    @staticmethod
+    def jsonToBlockchain(blockchainData: list[dict[str, any]]) -> 'Blockchain':
+        blockchain = [Block.fromJsonDataFull(block) for block in blockchainData]
+        return BlockChain(blockchain)
 
     @staticmethod
     def isValidHashChain(_chain: list[Block]):
