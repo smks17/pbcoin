@@ -76,7 +76,7 @@ class Block:
         new_block.blockHash = _data['hash']
         new_block.nonce = _data['nonce']
         new_block.trxHashes = _data['trx_hashes']
-        new_block.rootHashMerkleTree = _data['merkle_root']
+        new_block.rootHashMerkleTree = MerkleTree(_data['merkle_root'])
         if is_POSIX_timestamp:
             new_block.time = _data['time']
         else:
@@ -87,13 +87,16 @@ class Block:
     def fromJsonDataFull(_data: dict['str', any], is_POSIX_timestamp = True):
         new_block = Block.fromJsonDataHeader(_data['header'], is_POSIX_timestamp)
         trx = _data['trx']
+        _trxList = [] 
         for eachTrx in trx:
-            Trx(sender = eachTrx['sender'],
-                recipient = eachTrx['recipient'],
-                amount = eachTrx['amount'],
-                time = eachTrx['time']
+            _trxList.append(
+                Trx(sender = eachTrx['sender'],
+                    recipient = eachTrx['recipient'],
+                    amount = eachTrx['amount'],
+                    time = eachTrx['time']
+                )
             )
-        new_block.trxList = trx
+        new_block.trxList = _trxList
         return new_block
 
 
