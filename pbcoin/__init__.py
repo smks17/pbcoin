@@ -12,6 +12,7 @@ import pbcoin.mine as mine
 DIFFICULTY = (2 ** 512 - 1) >> (4*6) # difficulty level
 BLOCK_CHAIN = blockchain.BlockChain()
 NETWORK: net.Node = None
+MINER = mine.Mine()
 addrKey = key.Key()
 
 @dataclass
@@ -51,7 +52,7 @@ async def mine_starter(option):
     addrKey.genPublicKey()
     logging.info(f"your compress public key is generated: {addrKey.compressedPublic}")
     while True:
-        await mine.Mine.start()
+        await MINER.start()
 
 async def setupNet(option):
     global NETWORK

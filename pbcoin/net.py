@@ -11,7 +11,6 @@ from socket import *
 import pbcoin
 import pbcoin.block as pbBlock
 import pbcoin.blockchain as pbBlockchain
-import pbcoin.mine as mine
 
 DEFAULT_PORT = 8989
 DEFAULT_HOST = '127.0.0.1'
@@ -232,7 +231,7 @@ class Node:
 
     async def handleMinedBlock(self, data: dict[str, any]):
         """ handle for request finder new block"""
-        mine.Mine.stop_mining = True
+        pbcoin.MINER.stop_mining = True
         blockData = data['block']
         log.info(f"mine block from {data['src_ip']}: {blockData}")
         block = pbBlock.Block.fromJsonDataFull(blockData)
@@ -260,7 +259,7 @@ class Node:
                     blocks = res['blocks']
                     blocks = [pbBlock.Block.fromJsonDataFull(block) for block in blocks]
                     pbcoin.BLOCK_CHAIN.resolve(blocks)
-                    mine.Mine.start_over = True
+                    pbcoin.MINER.start_over = True
                 else:
                     # TODO
                     log.error("Bad request send for get blocks")
@@ -269,7 +268,7 @@ class Node:
             pass
         
         log.debug(f"new block chian: {pbcoin.BLOCK_CHAIN.getHashes()}")
-        mine.Mine.start_over = True
+        pbcoin.MINER.start_over = True
 
     async def handleGetBlock(self, data: dict[str, any], writer: asyncio.StreamWriter):
         copy_blockchain = copy(pbcoin.BLOCK_CHAIN)
