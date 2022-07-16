@@ -3,7 +3,7 @@ from datetime import datetime
 from hashlib import sha512
 from sys import getsizeof
 
-from pbcoin.trx import Trx
+from pbcoin.trx import Coin, Trx
 from pbcoin.merkleTree import MerkleTree
 
 class Block:
@@ -89,12 +89,10 @@ class Block:
         trx = _data['trx']
         _trxList = [] 
         for eachTrx in trx:
+            inputs = [Coin(in_coin['owner'], Coin['value']) for in_coin in eachTrx['inputs']]
+            outputs = [Coin(out_coin['owner'], Coin['value']) for out_coin in eachTrx['inputs']]
             _trxList.append(
-                Trx(sender = eachTrx['sender'],
-                    recipient = eachTrx['recipient'],
-                    amount = eachTrx['amount'],
-                    time = eachTrx['time']
-                )
+                Trx(inputs, outputs, eachTrx['time'])
             )
         new_block.trxList = _trxList
         return new_block
