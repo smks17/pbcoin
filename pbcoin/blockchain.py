@@ -2,6 +2,7 @@ from functools import reduce
 from enum import Flag, auto
 import logging
 from operator import or_ as _or_
+from sys import getsizeof
 
 from pbcoin.block import Block
 import pbcoin
@@ -24,6 +25,9 @@ class BlockValidationLevel(Flag):
 
 class BlockChain:
     blocks : list[Block]
+    is_fullNode: bool
+    # if is_fullNode is True then have cache for keep blocks
+    cache: float
     def __init__(self, _blockchain = []):
         self.blocks = _blockchain
 
@@ -45,6 +49,10 @@ class BlockChain:
         else:
             return validation
 
+        if (not self.is_fullNode) and (self.__sizeof__()>= self.cache):
+            self.blocks.pop(0)
+            print("pop")
+
     def resolve(self, new_blocks: list[Block]):
         if not BlockChain.isValidHashChain(new_blocks):
             return Exception
@@ -53,10 +61,15 @@ class BlockChain:
             if new_blocks[0].blocHeight > self.blocks[i].blocHeight:
                 if self.blocks[i].__hash__ != new_blocks[0].__hash__:
                     return Exception
-                del self.blocks[-i+1:]
+                self.blocks = self.blocks[:-i+1]
                 self.blocks += new_blocks
+                while (not self.is_fullNode) and (self.__sizeof__()>= self.cache):
+                    self.blocks.pop(0)
+                    print("pop")
+
 
     def getLastBlocks(self, n = 1):
+        # TODO: get from full node if not exist
         if n > len(self.blocks): return None # bad request
         return self.blocks[-n:]
 
@@ -116,3 +129,9 @@ class BlockChain:
         if len(self.blocks) == 0:
             return 0
         return self.last_block.blocHeight
+
+    def __sizeof__(self) -> int:
+        size = 0
+        for block in self.blocks:
+            size += getsizeof(block)
+        return size

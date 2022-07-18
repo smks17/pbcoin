@@ -21,6 +21,8 @@ class argvOption:
     port = 8989
     seeds = []
     debug = False
+    is_fullNode = False
+    cache = 1500#kb
 
 LOGGING_FORMAT = "%(asctime)s %(levelname)s %(message)s"
 
@@ -51,6 +53,8 @@ async def mine_starter(option):
     addrKey.genPrivateKey(option.ip)
     addrKey.genPublicKey()
     logging.info(f"your compress public key is generated: {addrKey.compressedPublic}")
+    BLOCK_CHAIN.is_fullNode = option.is_fullNode
+    BLOCK_CHAIN.cache = option.cache * 1000 # to bytes
     while True:
         await MINER.start()
 
