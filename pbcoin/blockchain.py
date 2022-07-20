@@ -45,13 +45,13 @@ class BlockChain:
         validation = self.isValidBlock(_block)
         if validation == BlockValidationLevel.ALL():
             self.blocks.append(_block)
+            _block.updateOutputs()
             logging.debug(f"new blockchain: {pbcoin.BLOCK_CHAIN.getHashes()}")
         else:
             return validation
 
         if (not self.is_fullNode) and (self.__sizeof__()>= self.cache):
             self.blocks.pop(0)
-            print("pop")
 
     def resolve(self, new_blocks: list[Block]):
         if not BlockChain.isValidHashChain(new_blocks):
@@ -65,7 +65,6 @@ class BlockChain:
                 self.blocks += new_blocks
                 while (not self.is_fullNode) and (self.__sizeof__()>= self.cache):
                     self.blocks.pop(0)
-                    print("pop")
 
 
     def getLastBlocks(self, n = 1):

@@ -49,10 +49,11 @@ class Trx:
     time: float
     hashTrx: str
     is_generic: bool
-    def __init__(self, _inputs: list[Coin] = None, _outputs: list[Coin] = None, time = None):
+    include_block: int
+    def __init__(self, include_block: int, _inputs: list[Coin] = None, _outputs: list[Coin] = None, time = None):
         if _inputs == None and _outputs == None:
             self.time = datetime.utcnow().timestamp() if not time else time
-            self.outputs = [Coin(pbcoin.addrKey.compressedPublic)]
+            self.outputs = [Coin(pbcoin.wallet.walletKey.compressedPublic)]
             self.value = DEFAULT_SUBSIDY
             self.is_generic = True
             self.inputs = []
@@ -64,6 +65,7 @@ class Trx:
             self.value = sum(coin.value for coin in self.outputs)
             self.is_generic = False
             self.hashTrx = self.calculateHash()
+        self.include_block = include_block
 
     @staticmethod
     def makeTrx(self,owner_coins: list[Coin], sender_key: str, recipient_key: str, value: float):
@@ -97,7 +99,8 @@ class Trx:
             'inputs': [in_coin.getData() for in_coin in self.inputs] if self.is_generic else [],
             'outputs': [out_coin.getData() for out_coin in self.outputs],
             'value': self.value,
-            'time': self.time if is_POSIX_timestamp else datetime.fromtimestamp(self.time)
+            'time': self.time if is_POSIX_timestamp else datetime.fromtimestamp(self.time),
+            'include_block': self.include_block
         }
         if with_hash:
             data['hash'] = self.__hash__

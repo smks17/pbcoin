@@ -13,7 +13,7 @@ DIFFICULTY = (2 ** 512 - 1) >> (4*6) # difficulty level
 BLOCK_CHAIN = blockchain.BlockChain()
 NETWORK: net.Node = None
 MINER = mine.Mine()
-addrKey = key.Key()
+ALL_OUTPUTS = dict() # TODO: move the better place and file
 
 @dataclass
 class argvOption:

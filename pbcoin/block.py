@@ -1,8 +1,10 @@
-import json
+import logging
 from datetime import datetime
 from hashlib import sha512
 from sys import getsizeof
 
+import pbcoin
+from pbcoin import trx
 from pbcoin.trx import Coin, Trx
 from pbcoin.merkleTree import MerkleTree
 
@@ -19,14 +21,14 @@ class Block:
 
     def __init__(self, preHash: str, blockHeight: int):
         self.previousHash = preHash
-        subsidy = Trx()
+        self.blocHeight = blockHeight
+        subsidy = Trx(self.blocHeight)
         self.trxList = [subsidy]
         self.nonce = 0
-        self.blocHeight = blockHeight
 
-    def addTrx(self, _trx):
+    def addTrx(self, inputs, outputs, time):
         # TODO: check validity
-        self.trxList.append(_trx)
+        self.trxList.append(trx.Trx(self.blocHeight, inputs, outputs, time))
 
     def getListHashesTrx(self):
         return [trx.hashTrx for trx in self.trxList]
@@ -37,6 +39,22 @@ class Block:
     def setMined(self):
         self.time = datetime.utcnow().timestamp()
         self.is_mined = True
+
+    def updateOutputs(self):
+        for trx in self.trxList:
+            for i, out_coin in enumerate(trx.outputs):
+                addr_coins = pbcoin.ALL_OUTPUTS.get(out_coin.owner)
+                if addr_coins:
+                    addr_coins.add((out_coin,i))
+                else:
+                    pbcoin.ALL_OUTPUTS[out_coin.owner] = {(out_coin, i)}
+            for in_coin in trx.inputs:
+                addr_coins = pbcoin.ALL_OUTPUTS.get(in_coin.owner)
+                if addr_coins:
+                    addr_coins.remove(in_coin.owner)
+                else:
+                    # TODO: bad trx
+                    pass
 
     def setNonce(self, _nonce: int): self.nonce = _nonce
 
@@ -62,9 +80,14 @@ class Block:
         }
         data = blockHeader
         if fullBlock:
+            trxList = []
+            for i in range(len(self.trxList)):
+                trx = self.trxList[i].getData()
+                trx['index'] = i
+                trxList.append(trx)
             data = {
                 "size": 0,  # set after init
-                "trx": [trx.getData() for trx in self.trxList],
+                "trx": trxList,
                 "header": blockHeader
             }
             data['size'] = getsizeof(data)
@@ -89,10 +112,10 @@ class Block:
         trx = _data['trx']
         _trxList = [] 
         for eachTrx in trx:
-            inputs = [Coin(in_coin['owner'], Coin['value']) for in_coin in eachTrx['inputs']]
-            outputs = [Coin(out_coin['owner'], Coin['value']) for out_coin in eachTrx['inputs']]
+            inputs = [Coin(in_coin['owner'], in_coin['value']) for in_coin in eachTrx['inputs']]
+            outputs = [Coin(out_coin['owner'], out_coin['value']) for out_coin in eachTrx['outputs']]
             _trxList.append(
-                Trx(inputs, outputs, eachTrx['time'])
+                Trx(new_block.blocHeight, inputs, outputs, eachTrx['time'])
             )
         new_block.trxList = _trxList
         return new_block

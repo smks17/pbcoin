@@ -1,7 +1,7 @@
 import asyncio
-from copy import copy
 import json
 import logging
+from copy import copy
 from sys import getsizeof
 from random import shuffle
 from enum import IntEnum, auto
@@ -34,6 +34,7 @@ class ConnectionCode(IntEnum):
     RESOLVE_BLOCKCHAIN = auto()
     GET_BLOCKS = auto()
     SEND_BLOCKS = auto()
+    ADD_TRX = auto()
 
 class Node:
     def __init__(self, ip, port):
@@ -99,7 +100,7 @@ class Node:
         data = json.loads(data.decode())
 
         #TODO
-        assert len(ConnectionCode) == 8, "some requests are not implemented yet!"
+        assert len(ConnectionCode) == 9, "some requests are not implemented yet!"
         _type = data['type']
         if _type == ConnectionCode.NEW_NEIGHBOR:
             await self.handleNewNeighbor(data)
@@ -119,6 +120,8 @@ class Node:
         elif _type == ConnectionCode.RESOLVE_BLOCKCHAIN:
             # TODO:
             assert False, "Not implemented yet"
+        elif _type == ConnectionCode.ADD_TRX:
+            await self.handleNewTrx(data)
         else:
             raise NotImplementedError
         writer.close()
@@ -292,6 +295,16 @@ class Node:
             bytes_data = json.dumps(request).encode()
             writer.write(sizeof(bytes_data).encode())
             writer.write(bytes_data)
+
+    async def handleNewTrx(self, data: dict[str, any]):
+        # TODO: check trx
+        inputs = data['inputs']
+        outputs = data['outputs']
+        time = data['time']
+        pbcoin.BLOCK_CHAIN.last_block.addTrx(inputs, outputs, time)
+        pbcoin.MINER.reset_nonce = True
+
+
 
     async def startUp(self, seeds: list[str]):
         """ begin to find new neighbors and connect to network"""
