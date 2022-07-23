@@ -53,7 +53,7 @@ class Trx:
     def __init__(self, include_block: int, _inputs: list[Coin] = None, _outputs: list[Coin] = None, time = None):
         if _inputs == None and _outputs == None:
             self.time = datetime.utcnow().timestamp() if not time else time
-            self.outputs = [Coin(pbcoin.wallet.walletKey.compressedPublic)]
+            self.outputs = [Coin(pbcoin.wallet.walletKey.publicKey().toString())]
             self.value = DEFAULT_SUBSIDY
             self.is_generic = True
             self.inputs = []

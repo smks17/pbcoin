@@ -1,5 +1,5 @@
 # pbcoin
-it is a simple blockchain with POW without any extra package
+it is a simple blockchain with POW
 
 ## run
 example of running 2 nodes
@@ -13,3 +13,6 @@ example of running 2 nodes
 ```
 
 also you can --help for print help message
+
+## TODO
+[ ] implement key and sign

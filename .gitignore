@@ -18,3 +18,5 @@ MANIFEST
 *.log
 
 .vscode/
+
+.key/

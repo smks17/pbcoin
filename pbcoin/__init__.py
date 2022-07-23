@@ -5,7 +5,7 @@ import sys
 import threading
 
 import pbcoin.blockchain as blockchain
-import pbcoin.key as key
+import pbcoin.wallet as wallet
 import pbcoin.net as net
 import pbcoin.mine as mine
 
@@ -13,6 +13,7 @@ DIFFICULTY = (2 ** 512 - 1) >> (4*6) # difficulty level
 BLOCK_CHAIN = blockchain.BlockChain()
 NETWORK: net.Node = None
 MINER = mine.Mine()
+wallet = wallet.Wallet()
 ALL_OUTPUTS = dict() # TODO: move the better place and file
 
 @dataclass
@@ -50,9 +51,8 @@ def setup(option: argvOption):
 
 
 async def mine_starter(option):
-    addrKey.genPrivateKey(option.ip)
-    addrKey.genPublicKey()
-    logging.info(f"your compress public key is generated: {addrKey.compressedPublic}")
+    wallet.genKey()
+    logging.info(f"your public key is generated: {wallet.walletKey.publicKey().toString()}")
     BLOCK_CHAIN.is_fullNode = option.is_fullNode
     BLOCK_CHAIN.cache = option.cache * 1000 # to bytes
     while True:
