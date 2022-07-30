@@ -1,3 +1,4 @@
+from copy import deepcopy
 from functools import reduce
 from enum import Flag, auto
 import logging
@@ -31,24 +32,29 @@ class BlockChain:
     def __init__(self, _blockchain = []):
         self.blocks = _blockchain
 
-    def setupNewBlock(self):
+    def setupNewBlock(self, mempool = []):
         if len(self.blocks) == 0:
             # generic block
             preHash = ""
+            height = 1
         else:
             preHash = self.last_block.__hash__
-        height = self.height
-        block = Block(preHash, height + 1)
+            height = self.height + 1
+        block = Block(preHash, height)
+        for trx in mempool:
+            block.addTrx(trx)
         return block
 
     def addNewBlock(self, _block: Block):
         validation = self.isValidBlock(_block)
         if validation == BlockValidationLevel.ALL():
-            self.blocks.append(_block)
-            _block.updateOutputs()
+            self.blocks.append(deepcopy(_block))
+            Block.updateOutputs(deepcopy(_block))
             logging.debug(f"new blockchain: {pbcoin.BLOCK_CHAIN.getHashes()}")
+            pbcoin.wallet.updateBalance(deepcopy(_block.trxList))
         else:
             return validation
+
 
         if (not self.is_fullNode) and (self.__sizeof__()>= self.cache):
             self.blocks.pop(0)
@@ -56,7 +62,8 @@ class BlockChain:
     def resolve(self, new_blocks: list[Block]):
         if not BlockChain.isValidHashChain(new_blocks):
             return Exception
-        
+
+        # TODO: update outputs coins
         for i in range(len(self.blocks)-1, -1, -1):
             if new_blocks[0].blocHeight > self.blocks[i].blocHeight:
                 if self.blocks[i].__hash__ != new_blocks[0].__hash__:
@@ -76,7 +83,8 @@ class BlockChain:
         valid = BlockValidationLevel.Bad
         if int(_block.__hash__, 16) <= pbcoin.DIFFICULTY:
             valid = valid | BlockValidationLevel.DIFFICULTY
-        valid = valid | BlockValidationLevel.TRX # TODO: check all trx
+        if _block.checkTrx():
+            valid = valid | BlockValidationLevel.TRX
         last_block = self.last_block
         if last_block:
             if _block.previousHash == last_block.__hash__:

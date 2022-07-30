@@ -4,7 +4,6 @@ from hashlib import sha512
 from sys import getsizeof
 
 import pbcoin
-from pbcoin import trx
 from pbcoin.trx import Coin, Trx
 from pbcoin.merkleTree import MerkleTree
 
@@ -26,35 +25,57 @@ class Block:
         self.trxList = [subsidy]
         self.nonce = 0
 
-    def addTrx(self, inputs, outputs, time):
-        # TODO: check validity
-        self.trxList.append(trx.Trx(self.blocHeight, inputs, outputs, time))
+    def addTrx(self, _trx):
+        self.trxList.append(_trx)
+        self.setRootHashMerkleTree()
 
     def getListHashesTrx(self):
         return [trx.hashTrx for trx in self.trxList]
 
     def setRootHashMerkleTree(self):
+        # TODO: implement add function in merkle tree
         self.rootHashMerkleTree = MerkleTree.buildMerkleTree(self.getListHashesTrx())
 
     def setMined(self):
         self.time = datetime.utcnow().timestamp()
         self.is_mined = True
 
-    def updateOutputs(self):
-        for trx in self.trxList:
-            for i, out_coin in enumerate(trx.outputs):
-                addr_coins = pbcoin.ALL_OUTPUTS.get(out_coin.owner)
-                if addr_coins:
-                    addr_coins.add((out_coin,i))
+    def checkTrx(self):
+        # TODO: return validation
+        for index, trx in enumerate(self.trxList):
+            in_coins = trx.inputs
+            out_coins = trx.outputs
+            for coin in in_coins:
+                if not coin.checkInputCoin():
+                    return False
+            if index != 0:
+                output_value = sum(out_coin.value for out_coin in out_coins)
+                input_value = sum(in_coin.value for in_coin in in_coins)
+                if output_value != input_value:
+                    return False
+            if trx.time <= datetime(2022, 1, 1).timestamp():
+                return False
+            if not all([out_coin.trxHash == trx.hashTrx for out_coin in out_coins]):
+                return False
+        return True
+
+    @staticmethod
+    def updateOutputs(block):
+        for trx in block.trxList:
+            in_coins = trx.inputs
+            out_coins = trx.outputs
+            for coin in in_coins:
+                if coin.checkInputCoin():
+                    unspent = pbcoin.ALL_OUTPUTS[trxHash]
+                    unspent[coin.index] = None
+                    if not any(unspent):
+                        pbcoin.ALL_OUTPUTS.pop(trxHash)
                 else:
-                    pbcoin.ALL_OUTPUTS[out_coin.owner] = {(out_coin, i)}
-            for in_coin in trx.inputs:
-                addr_coins = pbcoin.ALL_OUTPUTS.get(in_coin.owner)
-                if addr_coins:
-                    addr_coins.remove(in_coin.owner)
-                else:
-                    # TODO: bad trx
-                    pass
+                    pass # TODO
+            
+            for coin in out_coins:
+                trxHash = coin.trxHash
+                pbcoin.ALL_OUTPUTS[trxHash] = out_coins
 
     def setNonce(self, _nonce: int): self.nonce = _nonce
 
@@ -111,9 +132,13 @@ class Block:
         new_block = Block.fromJsonDataHeader(_data['header'], is_POSIX_timestamp)
         trx = _data['trx']
         _trxList = [] 
-        for eachTrx in trx:
-            inputs = [Coin(in_coin['owner'], in_coin['value']) for in_coin in eachTrx['inputs']]
-            outputs = [Coin(out_coin['owner'], out_coin['value']) for out_coin in eachTrx['outputs']]
+        for trx_idx, eachTrx in enumerate(trx):
+            inputs = []
+            for coin_idx, in_coin in enumerate(eachTrx['inputs']):
+                inputs.append(Coin(in_coin['owner'], coin_idx, in_coin['trx_hash'], in_coin['value']))
+            outputs = []
+            for coin_idx, out_coin in enumerate(eachTrx['outputs']):
+                outputs.append(Coin(out_coin['owner'], coin_idx, out_coin['trx_hash'], out_coin['value']))
             _trxList.append(
                 Trx(new_block.blocHeight, inputs, outputs, eachTrx['time'])
             )

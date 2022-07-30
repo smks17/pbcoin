@@ -8,9 +8,13 @@ from enum import IntEnum, auto
 from hashlib import md5
 from socket import *
 
+from ellipticcurve.publicKey import PublicKey
+from ellipticcurve.signature import Signature
+
 import pbcoin
 import pbcoin.block as pbBlock
 import pbcoin.blockchain as pbBlockchain
+import pbcoin.trx as trx
 
 DEFAULT_PORT = 8989
 DEFAULT_HOST = '127.0.0.1'
@@ -115,8 +119,6 @@ class Node:
             await self.handleMinedBlock(data)
         elif _type == ConnectionCode.GET_BLOCKS:
             await self.handleGetBlock(data, writer)
-        elif _type == ConnectionCode.GetNewBlockChain:
-            await self.handleBlockchainRequest(data, writer)
         elif _type == ConnectionCode.RESOLVE_BLOCKCHAIN:
             # TODO:
             assert False, "Not implemented yet"
@@ -297,14 +299,31 @@ class Node:
             writer.write(bytes_data)
 
     async def handleNewTrx(self, data: dict[str, any]):
+        data['passed_nodes'].append(self.ip)
         # TODO: check trx
-        inputs = data['inputs']
-        outputs = data['outputs']
-        time = data['time']
-        pbcoin.BLOCK_CHAIN.last_block.addTrx(inputs, outputs, time)
-        pbcoin.MINER.reset_nonce = True
-
-
+        pubKey = PublicKey.fromString(data['public_key'])
+        sig = Signature.fromBase64(data['signature'].encode())
+        trx_data = data['trx']
+        trx_inputs = trx_data['inputs']
+        trx_outputs = trx_data['outputs']
+        inputs = []
+        outputs = []
+        for in_coin in trx_inputs:
+            inputs.append(trx.Coin(in_coin["owner"], in_coin["index"], in_coin["trx_hash"], in_coin["value"]))
+        for out_coin in trx_outputs:
+            outputs.append(trx.Coin(out_coin["owner"], out_coin["index"], out_coin["trx_hash"], out_coin["value"]))
+        time = trx_data['time']
+        new_trx = trx.Trx(pbcoin.BLOCK_CHAIN.height, inputs, outputs, time)
+        if pbcoin.MINER.addTrxToMempool(new_trx, sig, pubKey):
+            for uid in self.neighbors:
+                ip, port = self.neighbors[uid]
+                if not ip in data['passed_nodes']:
+                    msg = copy(data)
+                    msg['src_ip'] = msg['dst_ip']
+                    msg['dst_ip'] = ip
+                    await self.connectAndSend(ip, port, json.dumps(msg), False)
+        else:
+            pass # TODO
 
     async def startUp(self, seeds: list[str]):
         """ begin to find new neighbors and connect to network"""
@@ -378,6 +397,21 @@ class Node:
             port = int(port)
             data['dst_ip'] = ip
             await self.connectAndSend(ip, port, json.dumps(data), False)
+
+    async def sendNewTrx(self, _trx: trx.Trx):
+        msg = {
+            "type": ConnectionCode.ADD_TRX,
+            "src_ip": f'{self.ip}:{self.port}',
+            'dst_ip': '',
+            "trx": _trx.getData(with_hash=True),
+            "signature": _trx.sign(),
+            "public_key": pbcoin.wallet.walletKey.publicKey().toString(),
+            "passed_nodes": [self.ip]
+        }
+        for uid in self.neighbors:
+            ip, port = self.neighbors[uid]
+            msg['dst_ip'] = ip
+            await self.connectAndSend(ip, port, json.dumps(msg), False)
 
     @staticmethod
     def calculate_uid(ip, port):

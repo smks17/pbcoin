@@ -24,6 +24,7 @@ class argvOption:
     debug = False
     is_fullNode = False
     cache = 1500#kb
+    mining = True
 
 LOGGING_FORMAT = "%(asctime)s %(levelname)s %(message)s"
 
@@ -53,10 +54,11 @@ def setup(option: argvOption):
 async def mine_starter(option):
     wallet.genKey()
     logging.info(f"your public key is generated: {wallet.walletKey.publicKey().toString()}")
-    BLOCK_CHAIN.is_fullNode = option.is_fullNode
-    BLOCK_CHAIN.cache = option.cache * 1000 # to bytes
-    while True:
-        await MINER.start()
+    if option.mining:
+        BLOCK_CHAIN.is_fullNode = option.is_fullNode
+        BLOCK_CHAIN.cache = option.cache * 1000 # to bytes
+        while True:
+            await MINER.start()
 
 async def setupNet(option):
     global NETWORK
