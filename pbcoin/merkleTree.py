@@ -1,6 +1,6 @@
 import math
-from hashlib import sha256
 import queue
+from hashlib import sha256
 
 class MerkleTree:
     def __init__(self, _hash = ''):
@@ -24,7 +24,7 @@ class MerkleTree:
         return leaves
 
     @staticmethod
-    def buildMerkleTree(_values: list[str]):
+    def buildMerkleTree(_values: list[str]) -> 'MerkleTree':
         """make merkle tree from _values that are hashes of trx"""
         values = _values.copy()
         q = queue.Queue(len(values))
@@ -53,7 +53,7 @@ class MerkleTree:
         root.computeHash()
         return root
 
-    def getProof(self, key_hash: str):
+    def getProof(self, key_hash: str = None, index = None):
         """
             find require hashes and correct path in pre-order walk for finding key_hash
 
@@ -72,25 +72,30 @@ class MerkleTree:
         leaves = self.findLeaves()
         hashes = []
         bits = []
-        for leaf in leaves:
-            if leaf.hash == key_hash:
-                hashes.append(leaf.hash)
-                parent = leaf.parent
-                current = leaf
-                while parent != None:
-                    if current.hash == parent.left.hash:
-                        hashes.append(parent.right.hash)
-                        bits.append(1)
-                        bits.insert(0, 0)
-                    else:
-                        hashes.insert(0, parent.left.hash)
-                        bits.append(1)
-                        bits.append(0)
-                    current = parent
-                    parent = current.parent
-                
-                bits.append(1)
-                return hashes, bits
+        def trace(leaf: MerkleTree):
+            hashes.append(leaf.hash)
+            parent = leaf.parent
+            current = leaf
+            while parent != None:
+                if current.hash == parent.left.hash:
+                    hashes.append(parent.right.hash)
+                    bits.append(1)
+                    bits.insert(0, 0)
+                else:
+                    hashes.insert(0, parent.left.hash)
+                    bits.append(1)
+                    bits.append(0)
+                current = parent
+                parent = current.parent
+            bits.append(1)
+            return hashes, bits
+
+        if index == None:
+            for leaf in leaves:
+                if leaf.hash == key_hash:
+                    return trace(leaf)
+        else:
+            return trace(leaves[index])
 
 
     @staticmethod
@@ -120,7 +125,7 @@ class MerkleTree:
                 return the rebuilt Merkle tree is not complete
 
         """
-        max_depth = math.ceil(math.log2(len(_hashes)))
+        max_depth = math.ceil(math.log2(len(_hashes)-1))+1
         def construct(depth: int):
             bit = bits.pop()
             node = None
