@@ -404,7 +404,7 @@ class Node:
             "src_ip": f'{self.ip}:{self.port}',
             'dst_ip': '',
             "trx": _trx.getData(with_hash=True),
-            "signature": _trx.sign(),
+            "signature": pbcoin.wallet.base64Sign(_trx),
             "public_key": pbcoin.wallet.walletKey.publicKey().toString(),
             "passed_nodes": [self.ip]
         }

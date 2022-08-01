@@ -2,8 +2,6 @@ from datetime import datetime
 from hashlib import sha512
 import json
 
-from ellipticcurve.ecdsa import Ecdsa
-
 import pbcoin
 
 DEFAULT_SUBSIDY = 50
@@ -150,8 +148,3 @@ class Trx:
     
     def __repr__(self) -> str:
         return json.dumps(self.getData(with_hash=True, is_POSIX_timestamp=True))
-
-    def sign(self):
-        data = self.__hash__
-        sig = Ecdsa.sign(data, pbcoin.wallet.walletKey) # TODO: sign sender
-        return sig.toBase64()

@@ -1,13 +1,15 @@
 import logging
 import os
+from random import random
 
 from ellipticcurve.privateKey import PrivateKey
+from ellipticcurve.ecdsa import Ecdsa
 
-from random import random
+import pbcoin
 import pbcoin.trx as trx
 
 class Wallet:
-    nAmount: int
+    nAmount: float
     walletKey: PrivateKey
     out_coins: dict[str,list[trx.Coin]]
     name = f"Wallet-{int(random()*1000)}"
@@ -45,3 +47,20 @@ class Wallet:
                     else:
                         self.out_coins[out_coin.trxHash] = [out_coin]
                     self.nAmount += out_coin.value
+
+    async def sendCoin(self, recipient: str, value: float):
+        if value <= self.nAmount:
+            made_trx = trx.Trx.makeTrx(sum(list(self.out_coins.values()), []),
+                            self.walletKey.publicKey().toString(), recipient, value)
+            if not pbcoin.MINER.addTrxToMempool(made_trx, self.sign(made_trx), self.walletKey.publicKey()):
+                return False
+            await pbcoin.NETWORK.sendNewTrx(made_trx)
+            return True
+        else:
+            return False
+
+    def sign(self, _trx):
+        return Ecdsa.sign(_trx.__hash__, pbcoin.wallet.walletKey)
+
+    def base64Sign(self, _trx):
+        return self.sign(_trx).toBase64()
