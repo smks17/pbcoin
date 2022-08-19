@@ -1,19 +1,21 @@
+from __future__ import annotations
+
 import asyncio
 import logging
-from dataclasses import dataclass
 import sys
 import threading
+from dataclasses import dataclass
 
 import pbcoin.blockchain as blockchain
 import pbcoin.wallet as wallet
 import pbcoin.net as net
 import pbcoin.mine as mine
 
-DIFFICULTY = (2 ** 512 - 1) >> (4*6) # difficulty level
+DIFFICULTY = (2 ** 512 - 1) >> (21) # difficulty level
 BLOCK_CHAIN = blockchain.BlockChain()
 NETWORK: net.Node = None
 MINER = mine.Mine()
-wallet = wallet.Wallet()
+WALLET = wallet.Wallet()
 ALL_OUTPUTS = dict() # TODO: move the better place and file
 
 @dataclass
@@ -22,13 +24,13 @@ class argvOption:
     port = 8989
     seeds = []
     debug = False
-    is_fullNode = False
+    is_full_node = False
     cache = 1500#kb
     mining = True
 
 LOGGING_FORMAT = "%(asctime)s %(levelname)s %(message)s"
 
-def setup(option: argvOption):
+def run(option: argvOption):
     # logging
     LOGGING_LEVEL = logging.DEBUG if option.debug else logging.INFO
     LOGGING_FILENAME = f"node-{option.ip}.log"
@@ -52,10 +54,10 @@ def setup(option: argvOption):
 
 
 async def mine_starter(option):
-    wallet.genKey()
-    logging.info(f"your public key is generated: {wallet.walletKey.publicKey().toString()}")
+    WALLET.gen_key()
+    logging.info(f"your public key is generated: {WALLET.public_key}")
     if option.mining:
-        BLOCK_CHAIN.is_fullNode = option.is_fullNode
+        BLOCK_CHAIN.is_full_node = option.is_full_node
         BLOCK_CHAIN.cache = option.cache * 1000 # to bytes
         while True:
             await MINER.start()
@@ -63,5 +65,5 @@ async def mine_starter(option):
 async def setupNet(option):
     global NETWORK
     NETWORK = net.Node(option.ip, option.port)
-    await NETWORK.startUp(option.seeds)
+    await NETWORK.start_up(option.seeds)
     await NETWORK.listen()

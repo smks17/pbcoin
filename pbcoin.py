@@ -1,9 +1,9 @@
+from __future__ import annotations
+
 import asyncio
 import sys
 import threading
 from pprint import pprint
-
-from numpy import block
 
 import pbcoin
 
@@ -21,7 +21,7 @@ def usage():
     print("  --cache <NUMBER>        allocate for cache (number is in kb)")
     print("  --no-cli                Could not have interaction with app")
 
-def parseArgv(argv: list[str]):
+def parse_argv(argv: list[str]):
     option = pbcoin.argvOption()
     i = 1
     while i < len(argv):
@@ -40,7 +40,7 @@ def parseArgv(argv: list[str]):
         elif argv[i] == '--debug':
             option.debug = True
         elif argv[i] == '--full-node':
-            option.is_fullNode = True
+            option.is_full_node = True
         elif argv[i] == '--cache':
             i += 1
             option.cache = float(argv[i])
@@ -66,25 +66,25 @@ async def cli(option):
                 amount = int(args[1])
             except:
                 print("ERROR: bad usage")
-            res = await pbcoin.wallet.sendCoin(recipient, amount)
+            res = await pbcoin.WALLET.send_coin(recipient, amount)
             if res:
                 print("Successful")
             else:
                 print("ERROR: Could not have been send coins")
         elif command == 'balance':
-            print(f"Your balance: {pbcoin.wallet.nAmount}")
+            print(f"Your balance: {pbcoin.WALLET.n_amount}")
         elif command == 'block':
             try:
                 if args[0] == 'last':
                     last_block = pbcoin.BLOCK_CHAIN.last_block
                     if last_block:
-                        pprint(f"Block: {last_block.getData(is_POSIX_timestamp=False)}")
+                        pprint(f"Block: {last_block.get_data(is_POSIX_timestamp=False)}")
                     else:
                         print("ERROR: No Block has been mined yet!")
                 else:
                     index_block = pbcoin.BLOCK_CHAIN.search(args[0])
                     if index_block:
-                        pprint(f"Block: {block[index_block].getData(is_POSIX_timestamp=False)}")
+                        pprint(f"Block: {pbcoin.BLOCK_CHAIN.blocks[index_block].getData(is_POSIX_timestamp=False)}")
                     else:
                         print("ERROR: Not exist block")
             except:
@@ -127,12 +127,12 @@ async def cli(option):
             print(f"ERROR: Unknown command: {command}")
 
 def main(argv):
-    option = parseArgv(argv)
+    option = parse_argv(argv)
     if has_cli:
-        threading.Thread(target=pbcoin.setup, args=[option]).start()
+        threading.Thread(target=pbcoin.run, args=[option]).start()
         threading.Thread(target=asyncio.run, args=[cli(option)]).start()
     else:
-        pbcoin.setup(option)
+        pbcoin.run(option)
 
 if __name__ == "__main__":
     main(sys.argv)

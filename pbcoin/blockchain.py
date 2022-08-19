@@ -1,12 +1,20 @@
+from __future__ import annotations
+
+import logging
 from copy import deepcopy
 from functools import reduce
 from enum import Flag, auto
-import logging
 from operator import or_ as _or_
 from sys import getsizeof
+from typing import (
+    Any,
+    Dict,
+    List
+)
 
-from pbcoin.block import Block
 import pbcoin
+from pbcoin.block import Block
+
 
 class BlockValidationLevel(Flag):
     Bad = 0
@@ -19,123 +27,145 @@ class BlockValidationLevel(Flag):
         """ get variable with all flag for checking validation """
         cls_name = cls.__name__
         if not len(cls):
-            raise AttributeError(f'empty {cls_name} does not have an ALL value')
+            raise AttributeError(
+                f'empty {cls_name} does not have an ALL value')
         value = cls(reduce(_or_, cls))
         cls._member_map_['ALL'] = value
         return value
 
-class BlockChain:
-    blocks : list[Block]
-    is_fullNode: bool
-    # if is_fullNode is True then have cache for keep blocks
-    cache: float
-    def __init__(self, _blockchain = []):
-        self.blocks = _blockchain
 
-    def setupNewBlock(self, mempool = []):
+class BlockChain:
+    """
+    An in-memory blocks data
+    
+    Attributes
+    ----------
+    blocks: List[Block]
+        List of chain blocks are kept in memory
+    is_full_node: bool
+    cache: float
+        how much keep blocks data in memory for non full nodes.
+        (it is in kb)
+    """
+    def __init__(self, blockchain_=[]):
+        self.blocks = blockchain_
+
+    def setup_new_block(self, mempool=[]):
+        """set up a new block in chain for mine"""
         if len(self.blocks) == 0:
+            # TODO: check from other nodes because blockchain class delete blocks from large chain
             # generic block
-            preHash = ""
+            previous_hash = ""
             height = 1
         else:
-            preHash = self.last_block.__hash__
+            previous_hash = self.last_block.__hash__
             height = self.height + 1
-        block = Block(preHash, height)
+        
+        block = Block(previous_hash, height)
+        
+        # add remain transactions in mempool to next block
         for trx in mempool:
-            block.addTrx(trx)
+            block.add_trx(trx)
         return block
 
-    def addNewBlock(self, _block: Block):
-        validation = self.isValidBlock(_block)
+    def add_new_block(self, block_: Block) -> (BlockValidationLevel | None):
+        validation = self.is_valid_block(block_)
         if validation == BlockValidationLevel.ALL():
-            self.blocks.append(deepcopy(_block))
-            Block.updateOutputs(deepcopy(_block))
-            logging.debug(f"new blockchain: {pbcoin.BLOCK_CHAIN.getHashes()}")
-            pbcoin.wallet.updateBalance(deepcopy(_block.trxList))
+            self.blocks.append(deepcopy(block_))
+            Block.update_outputs(deepcopy(block_))
+            logging.debug(f"new blockchain: {pbcoin.BLOCK_CHAIN.get_hashes()}")
+            pbcoin.WALLET.updateBalance(deepcopy(block_.transactions))
         else:
             return validation
 
-
-        if (not self.is_fullNode) and (self.__sizeof__()>= self.cache):
+        if (not self.is_full_node) and (self.__sizeof__() >= self.cache):
             self.blocks.pop(0)
 
-    def resolve(self, new_blocks: list[Block]):
+    def resolve(self, new_blocks: List[Block]) -> None:
         if not BlockChain.isValidHashChain(new_blocks):
             return Exception
 
         # TODO: update outputs coins
         for i in range(len(self.blocks)-1, -1, -1):
-            if new_blocks[0].blocHeight > self.blocks[i].blocHeight:
+            if new_blocks[0].block_height > self.blocks[i].block_height:
                 if self.blocks[i].__hash__ != new_blocks[0].__hash__:
                     return Exception
                 self.blocks = self.blocks[:-i+1]
                 self.blocks += new_blocks
-                while (not self.is_fullNode) and (self.__sizeof__()>= self.cache):
+                while (not self.is_full_node) and (self.__sizeof__() >= self.cache):
                     self.blocks.pop(0)
 
-
-    def getLastBlocks(self, n = 1):
+    def get_last_blocks(self, number=1) -> (List[Block] | None):
+        """get last n blocks"""
         # TODO: get from full node if not exist
-        if n > len(self.blocks): return None # bad request
-        return self.blocks[-n:]
+        if number > len(self.blocks):
+            return None  # bad request
+        return self.blocks[-number:]
 
-    def isValidBlock(self, _block: Block):
+    def is_valid_block(self, _block: Block) -> BlockValidationLevel:
+        """checking validation and return validation level"""
         valid = BlockValidationLevel.Bad
+        
+        # difficulty level
         if int(_block.__hash__, 16) <= pbcoin.DIFFICULTY:
             valid = valid | BlockValidationLevel.DIFFICULTY
-        if _block.checkTrx():
+        
+        # check all trx
+        if _block.check_trx():
             valid = valid | BlockValidationLevel.TRX
+        
+        # check previous hash
         last_block = self.last_block
         if last_block:
-            if _block.previousHash == last_block.__hash__:
+            if _block.previous_hash == last_block.__hash__:
                 valid = valid | BlockValidationLevel.PREVIOUS_HASH
         else:
-            if _block.previousHash == '':
+            if _block.previous_hash == '':
                 valid = valid | BlockValidationLevel.PREVIOUS_HASH
 
         return valid
 
     def search(self, key_hash):
-        """ search from last block to first for find block with key_hash """
+        """search from last block to first for find block with key_hash"""
         for i in range(len(self.blocks)-1, -1, -1):
             if self.blocks[i].__hash__ == key_hash:
                 return i
         return None
 
-    def getData(self, first_index = 0, last_index = None):
+    def get_data(self, first_index=0, last_index=None) -> List[Dict[str, Any]]:
+        """get block data from first_index to last_index.
+        (last_index = None means to end of blockchain)"""
+        # TODO: if not exist get from full node
         if last_index == None:
             last_index = len(self.blocks)
-        return [block.getData() for block in self.blocks[first_index : last_index]]
+        return [block.get_data() for block in self.blocks[first_index: last_index]]
 
-    def getHashes(self, first_index = 0, last_index = None):
+    def get_hashes(self, first_index=0, last_index=None) -> List[str]:
+        """ get list of blocks hash in blockchain """
+        # TODO: if not exist get from full node
         if last_index == None:
             last_index = len(self.blocks)
-        if len(self.blocks) == 0: return ''
-        return [block.__hash__ for block in self.blocks[first_index : last_index]]
+        if len(self.blocks) == 0:
+            return []
+        return [block.__hash__ for block in self.blocks[first_index: last_index]]
 
     @staticmethod
-    def jsonToBlockchain(blockchainData: list[dict[str, any]]) -> 'Blockchain':
-        blockchain = [Block.fromJsonDataFull(block) for block in blockchainData]
+    def json_to_blockchain(blockchain_data: List[Dict[str, Any]]) -> BlockChain:
+        blockchain = [Block.from_json_data_full(
+            block) for block in blockchain_data]
         return BlockChain(blockchain)
 
-    @staticmethod
-    def isValidHashChain(_chain: list[Block]):
-        for i in range(1, len(_chain)):
-            if _chain[i].__hash__ != _chain[i-1].__hash__:
-                return False
-        return True
-
     @property
-    def last_block(self):
+    def last_block(self) -> (Block | None):
         if len(self.blocks) == 0:
             return None
         return self.blocks[-1]
 
     @property
-    def height(self):
+    def height(self) -> int:
         if len(self.blocks) == 0:
             return 0
-        return self.last_block.blocHeight
+        return self.last_block.block_height
 
     def __sizeof__(self) -> int:
         size = 0

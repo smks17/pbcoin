@@ -1,157 +1,226 @@
-import logging
+from __future__ import annotations
+
 from datetime import datetime
 from hashlib import sha512
 from sys import getsizeof
 
 import pbcoin
 from pbcoin.trx import Coin, Trx
-from pbcoin.merkleTree import MerkleTree
+from pbcoin.merkle_tree import MerkleTreeNode
+
 
 class Block:
-    trxList: list[Trx]
-    previousHash: str
-    nonce: int
-    blockHash: str
-    time: float  # time that this block mined in POSIX timestamp format
-    is_mined = False
-    blocHeight: int
-    trxHashes: list[str]  # using for header block
-    rootHashMerkleTree: MerkleTree = None
+    """
+    Block contains transactions and nodes find a hash of them
+    that is less than difficulty
 
-    def __init__(self, preHash: str, blockHeight: int):
-        self.previousHash = preHash
-        self.blocHeight = blockHeight
-        subsidy = Trx(self.blocHeight)
-        self.trxList = [subsidy]
+    Attributes
+    ----------
+        trx_list: list[Trx]
+            list of all trx in block
+        previous_hash: str
+            hash of previous block in blockchain
+        nonce: int
+
+        block_hash: str
+            hash string this block (in hex)
+        time: float
+            time that this block mined in POSIX timestamp format
+        is_mined: bool = False
+            if it is True, it means block is mined
+        block_height: int
+            how many block is before that block in blockchain
+        trx_hashes: list[str]
+            list of all trx hash (using for header block)
+        merkle_tree: MerkleTree = None
+            a object of MerkleTree class of root
+    """
+
+    def __init__(self, preHash: str, block_height: int):
+        self.previous_hash = preHash
+        self.block_height = block_height
         self.nonce = 0
+        # make subsidy trx (a trx that give itself reward for mine block)
+        subsidy = Trx(self.block_height)
+        self.transactions = [subsidy]
+        self.merkle_tree = self.build_merkle_tree()
 
-    def addTrx(self, _trx):
-        self.trxList.append(_trx)
-        self.setRootHashMerkleTree()
-
-    def getListHashesTrx(self):
-        return [trx.hashTrx for trx in self.trxList]
-
-    def setRootHashMerkleTree(self):
+    def add_trx(self, trx_: Trx) -> None:
+        """ add new trx without checking to block """
+        self.transactions.append(trx_)
         # TODO: implement add function in merkle tree
-        self.rootHashMerkleTree = MerkleTree.buildMerkleTree(self.getListHashesTrx())
+        self.build_merkle_tree()
 
-    def setMined(self):
+    def get_list_hashes_trx(self) -> list[str]:
+        return [trx.hash_trx for trx in self.transactions]
+
+    def build_merkle_tree(self) -> None:
+        """ set and build merkle tree from trxs of block"""
+        self.merkle_tree = MerkleTreeNode.build_merkle_tree(
+            self.get_list_hashes_trx())
+
+    def set_mined(self) -> None:
         self.time = datetime.utcnow().timestamp()
         self.is_mined = True
 
-    def checkTrx(self):
+    def check_trx(self) -> bool:
+        """checking the all block trx"""
         # TODO: return validation
-        for index, trx in enumerate(self.trxList):
+        for index, trx in enumerate(self.transactions):
             in_coins = trx.inputs
             out_coins = trx.outputs
             for coin in in_coins:
-                if not coin.checkInputCoin():
+                # is input coin trx valid
+                if not coin.check_input_coin():
                     return False
             if index != 0:
+                # check equal input and output value
                 output_value = sum(out_coin.value for out_coin in out_coins)
                 input_value = sum(in_coin.value for in_coin in in_coins)
                 if output_value != input_value:
                     return False
+            # check valid time
             if trx.time <= datetime(2022, 1, 1).timestamp():
                 return False
-            if not all([out_coin.trxHash == trx.hashTrx for out_coin in out_coins]):
+            # check trx hash output coin
+            if not all([out_coin.trx_hash == trx.hash_trx for out_coin in out_coins]):
                 return False
         return True
 
-    @staticmethod
-    def updateOutputs(block):
-        for trx in block.trxList:
+    def update_outputs(self) -> None:
+        """update "database" of output coins that are unspent"""
+        for trx in self.transactions:
             in_coins = trx.inputs
             out_coins = trx.outputs
             for coin in in_coins:
-                if coin.checkInputCoin():
-                    unspent = pbcoin.ALL_OUTPUTS[trxHash]
+                # check input coin and if is valid, delete from unspent coins
+                if coin.check_input_coin():
+                    unspent = pbcoin.ALL_OUTPUTS[trx_hash]
                     unspent[coin.index] = None
                     if not any(unspent):
-                        pbcoin.ALL_OUTPUTS.pop(trxHash)
+                        pbcoin.ALL_OUTPUTS.pop(trx_hash)
                 else:
-                    pass # TODO
-            
+                    pass  # TODO
+
+            # add output coins to unspent coins
             for coin in out_coins:
-                trxHash = coin.trxHash
-                pbcoin.ALL_OUTPUTS[trxHash] = out_coins
+                trx_hash = coin.trx_hash
+                pbcoin.ALL_OUTPUTS[trx_hash] = out_coins
 
-    def setNonce(self, _nonce: int): self.nonce = _nonce
+    def set_nonce(self, nonce_: int): self.nonce = nonce_
 
-    def calculateHash(self):
-        if not self.rootHashMerkleTree:
-            self.setRootHashMerkleTree()
-        nonceHash = sha512(str(self.nonce).encode()).hexdigest()
-        calculatedHash = sha512(
-            (self.rootHashMerkleTree.hash + nonceHash + self.previousHash).encode()).hexdigest()
-        self.blockHash = calculatedHash
-        return calculatedHash
+    def calculate_hash(self) -> str:
+        if not self.merkle_tree:
+            self.build_merkle_tree()
+        nonce_hash = sha512(str(self.nonce).encode()).hexdigest()
+        calculated_hash = sha512(
+            (self.merkle_tree.hash + nonce_hash + self.previous_hash).encode()
+        ).hexdigest()
+        self.block_hash = calculated_hash
+        return calculated_hash
 
-    def getData(self, fullBlock = True, is_POSIX_timestamp = True):
-        blockHeader = {
+    def get_data(self, is_full_lock=True, is_POSIX_timestamp=True) -> dict[str, any]:
+        """
+            get data of block that has:
+                header:
+                - hash: block hash
+                - height: block height (number of blocks before this block)
+                - nonce: 
+                - number trx: number of transactions in this block
+                - merkle_root: merkle tree root hash of transactions
+                - trx_hashes: list of transactions hash
+                - previous_hash
+                - time: the time is mined
+                
+                other:
+                - trx: list of all block transactions
+                - size: size of data (block)
+            
+            argument
+            --------
+                - fis_ull_block: bool = True
+                    if it is False, return just header block data
+                - is_POSIX_timestamp: bool = True:
+                    if it is False, return data with humanely time represent
+            return
+            ------
+                dict[str, any]
+                    return block data
+        """
+        block_header = {
             "hash": self.__hash__,
-            "height": self.blocHeight,
+            "height": self.block_height,
             "nonce": self.nonce,
-            "number_trx": len(self.trxList),
-            "merkle_root": self.rootHashMerkleTree.hash,
-            "trx_hashes": self.getListHashesTrx(),
-            "previous_hash": self.previousHash,
+            "number_trx": len(self.transactions),
+            "merkle_root": self.merkle_tree.hash,
+            "trx_hashes": self.get_list_hashes_trx(),
+            "previous_hash": self.previous_hash,
             "time": self.time if is_POSIX_timestamp else datetime.fromtimestamp(self.time)
         }
-        data = blockHeader
-        if fullBlock:
-            trxList = []
-            for i in range(len(self.trxList)):
-                trx = self.trxList[i].getData()
+        data = block_header
+        if is_full_lock:
+            trx_list = []
+            for i in range(len(self.transactions)):
+                trx = self.transactions[i].get_data()
                 trx['index'] = i
-                trxList.append(trx)
+                trx_list.append(trx)
             data = {
                 "size": 0,  # set after init
-                "trx": trxList,
-                "header": blockHeader
+                "trx": trx_list,
+                "header": block_header
             }
             data['size'] = getsizeof(data)
         return data
 
     @staticmethod
-    def fromJsonDataHeader(_data: dict['str', any], is_POSIX_timestamp = True):
-        new_block = Block(_data['previous_hash'], _data['height'])
-        new_block.blockHash = _data['hash']
-        new_block.nonce = _data['nonce']
-        new_block.trxHashes = _data['trx_hashes']
-        new_block.rootHashMerkleTree = MerkleTree(_data['merkle_root'])
+    def from_json_data_header(data: dict['str', any], is_POSIX_timestamp=True) -> Block:
+        new_block = Block(data['previous_hash'], data['height'])
+        new_block.block_hash = data['hash']
+        new_block.nonce = data['nonce']
+        new_block.trx_hashes = data['trx_hashes']
+        new_block.merkle_tree = MerkleTreeNode(data['merkle_root'])
         if is_POSIX_timestamp:
-            new_block.time = _data['time']
+            new_block.time = data['time']
         else:
-            datetime.fromisoformat(_data['time'])
+            datetime.fromisoformat(data['time'])
         return new_block
 
     @staticmethod
-    def fromJsonDataFull(_data: dict['str', any], is_POSIX_timestamp = True):
-        new_block = Block.fromJsonDataHeader(_data['header'], is_POSIX_timestamp)
-        trx = _data['trx']
-        _trxList = [] 
-        for trx_idx, eachTrx in enumerate(trx):
+    def from_json_data_full(data: dict['str', any], is_POSIX_timestamp=True) -> Block:
+        new_block = Block.from_json_data_header(data['header'], is_POSIX_timestamp)
+        trx = data['trx']
+        trxList_ = []
+        for each_trx in trx:
             inputs = []
-            for coin_idx, in_coin in enumerate(eachTrx['inputs']):
-                inputs.append(Coin(in_coin['owner'], coin_idx, in_coin['trx_hash'], in_coin['value']))
+            for coin_idx, in_coin in enumerate(each_trx['inputs']):
+                inputs.append(
+                    Coin(in_coin['owner'],
+                        coin_idx,
+                        in_coin['trx_hash'],
+                        in_coin['value']
+                    )
+                )
             outputs = []
-            for coin_idx, out_coin in enumerate(eachTrx['outputs']):
-                outputs.append(Coin(out_coin['owner'], coin_idx, out_coin['trx_hash'], out_coin['value']))
-            _trxList.append(
-                Trx(new_block.blocHeight, inputs, outputs, eachTrx['time'])
+            for coin_idx, out_coin in enumerate(each_trx['outputs']):
+                outputs.append(
+                    Coin(out_coin['owner'],
+                        coin_idx,
+                        out_coin['trx_hash'],
+                        out_coin['value']
+                    )
+                )
+            trxList_.append(
+                Trx(new_block.block_height, inputs, outputs, each_trx['time'])
             )
-        new_block.trxList = _trxList
+        new_block.transactions = trxList_
         return new_block
-
 
     @property
     def __hash__(self):
-        return self.calculateHash() if self.blockHash == None else self.blockHash
+        return self.calculate_hash() if self.block_hash == None else self.block_hash
 
     def __str__(self) -> str:
-        return self.trxList.__str__() + str(self.proof) + self.previousHash
+        return self.transactions.__str__() + str(self.proof) + self.previous_hash
 
     def __repr__(self) -> str:
-        return self.getData()
+        return self.get_data()
