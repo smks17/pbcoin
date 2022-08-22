@@ -10,13 +10,16 @@ import pbcoin.blockchain as blockchain
 import pbcoin.wallet as wallet
 import pbcoin.net as net
 import pbcoin.mine as mine
+import pbcoin.cli_handler as cls
 
+# TODO: put these in config.py
 DIFFICULTY = (2 ** 512 - 1) >> (21) # difficulty level
 BLOCK_CHAIN = blockchain.BlockChain()
 NETWORK: net.Node = None
 MINER = mine.Mine()
 WALLET = wallet.Wallet()
 ALL_OUTPUTS = dict() # TODO: move the better place and file
+SOCKET_PATH = './node_socket.s'
 
 @dataclass
 class argvOption:
@@ -27,6 +30,7 @@ class argvOption:
     is_full_node = False
     cache = 1500#kb
     mining = True
+    socket_path = SOCKET_PATH
 
 LOGGING_FORMAT = "%(asctime)s %(levelname)s %(message)s"
 
@@ -38,17 +42,26 @@ def run(option: argvOption):
                         filename=LOGGING_FILENAME, filemode="w")
 
     try:
+        # network
         _net_thread = threading.Thread(
             target=asyncio.run, args=[setupNet(option)])
+        # mine 
         _mine_thread = threading.Thread(
             target=asyncio.run, args=[mine_starter(option)])
+        # cli network
+        SOCKET_PATH = option.socket_path
+        cli_server = cls.CliServer(SOCKET_PATH)
+        _cli_thread = threading.Thread(
+            target=asyncio.run, args=[cli_server.start()])
         _net_thread.daemon = True
         _mine_thread.daemon = True
         _net_thread.start()
         _mine_thread.start()
+        _cli_thread.start()
         while _net_thread.is_alive() and _mine_thread.is_alive():
             _net_thread.join(1)
             _mine_thread.join(1)
+            _cli_thread.join(1)
     except KeyboardInterrupt:
         sys.exit(1)
 

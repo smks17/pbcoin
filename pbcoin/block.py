@@ -155,7 +155,7 @@ class Block:
             "merkle_root": self.merkle_tree.hash,
             "trx_hashes": self.get_list_hashes_trx(),
             "previous_hash": self.previous_hash,
-            "time": self.time if is_POSIX_timestamp else datetime.fromtimestamp(self.time)
+            "time": self.time if is_POSIX_timestamp else datetime.fromtimestamp(self.time).__str__()
         }
         data = block_header
         if is_full_lock:
