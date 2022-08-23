@@ -14,7 +14,7 @@ def usage():
     print("  --seeds <IP>:<PORT>     for connect to network of blockchain")
     print("  --full-node             keep all data of blockchain")
     print("  --cache <NUMBER>        allocate for cache (number is in kb)")
-    print("  --socket <PATH>         path make a unix socket for cli could connect")
+    print("  --socket <PATH>         path make a unix/pipe(for windows) socket for cli could connect")
 
 def parse_argv(argv: list[str]):
     option = pbcoin.argvOption()

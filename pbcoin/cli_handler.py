@@ -9,19 +9,31 @@ import traceback
 from sys import platform
 from typing import List, Tuple
 
+if os.name == 'nt':
+    import win32pipe
+    import win32file
+
 import pbcoin
 from .cliflag import CliErrorCode, CliCommandCode
 
 class CliServer():
     def __init__(self, socket_path_) -> None:
-        self.is_unix = socket.AF_UNIX != None
-        self.socket_path = socket_path_
+        """
+        socket_path_ for unix os is a path to unix socket like: './node_socket.s'
+        but for windows os is a path to pipe socket like: '//./pipe/node_socket'
+        """
+        try:
+            self.is_unix = socket.AF_UNIX != None
+            self.socket_path = socket_path_
+        except:
+            self.is_unix = False
+            self.pipe_path = socket_path_
 
-    async def handle_cli_command(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-        """handle the user input cli from receive data socket"""
+    async def handle_cli_command_unix(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        """handle the user input cli from receive data UNIX socket"""
         recv = await reader.readuntil(b'\n')
         recv = recv.decode()
-        # TODO: better receive (make a buffer clas)
+        # TODO: better receive (make a buffer class)
         args = recv.split()
         command = args.pop(0)
         result, errors = await self.parse_args(int(command), args)
@@ -31,11 +43,30 @@ class CliServer():
         await writer.drain()
         writer.close()
 
+    async def handle_cli_command_win(self, pipe):
+        """handle the user input cli from receive data Windows pipe socket"""
+        # TODO: better receive (make a buffer class)
+        buffer_size = 2048
+        buffer = ""
+        _, recv = win32file.ReadFile(pipe, buffer_size)
+        buffer = recv
+        while len(recv) == buffer_size:
+            _, recv = win32file.ReadFile(pipe, buffer_size)
+            buffer += recv
+        # TODO: handle this multi line
+        buffer = buffer.decode()
+        line = buffer.split("\n")[0]
+        args = line.split()
+        command = args.pop(0)
+        result, errors = await self.parse_args(int(command), args)
+        win32file.WriteFile(pipe, f'{result}\n{errors.value}\n'.encode())
+
     async def start(self):
+        # using AF_UNIX for cli api
         if self.is_unix:
             if os.path.exists(self.socket_path):
                 os.remove(self.socket_path)
-            server = await asyncio.start_unix_server(self.handle_cli_command, self.socket_path)
+            server = await asyncio.start_unix_server(self.handle_cli_command_unix, self.socket_path)
             os.chmod(self.socket_path, 0o666)
             loop = asyncio.get_event_loop()
             async with server:
@@ -46,12 +77,28 @@ class CliServer():
                 finally:
                     server.close()
                     await server.wait_closed()
+        # use windows pipe socket for cli api
         elif platform == "win32":
-            # TODO
-            raise NotImplementedError()
+            while True:
+                pipe = win32pipe.CreateNamedPipe(
+                    r'\\.\pipe\node_socket',
+                    win32pipe.PIPE_ACCESS_DUPLEX,
+                    win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT,
+                    1,  # nMaxInstances
+                    65536,  # nOutBufferSize
+                    65536,  # nInBufferSize
+                    0, # 50ms timeout (the default)
+                    None # securityAttributes
+                )
+                try:
+                    win32pipe.ConnectNamedPipe(pipe, None)
+                    await self.handle_cli_command_win(pipe)
+                except:
+                    logging.error("cli server is broken for some reason")
+                finally:
+                    win32file.CloseHandle(pipe)
         else:
             raise NotImplementedError()
-
 
     async def parse_args(self, command: int, args: List[str]) -> Tuple[str, CliErrorCode]:
         """parse the argument base on command input from user and do the command"""
@@ -107,7 +154,7 @@ class CliServer():
                 else:
                     errors |= CliErrorCode.MINING_OFF
             elif arg == 'state':
-                state =  "stoped" if pbcoin.MINER.stop_mining else "running"
+                state =  "stopped" if pbcoin.MINER.stop_mining else "running"
                 result += state
             else:
                 errors |= CliErrorCode.BAD_USAGE

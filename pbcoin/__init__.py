@@ -13,13 +13,25 @@ import pbcoin.mine as mine
 import pbcoin.cli_handler as cls
 
 # TODO: put these in config.py
+OS_TYPE = None
+if (sys.platform == 'Linux' or
+    sys.platform == 'Linux2' or
+    sys.platform == 'cygwin' or
+    sys.platform == 'darwin'
+):
+    OS_TYPE = 'unix'
+elif sys.platform == 'win32':
+    OS_TYPE = 'win'
 DIFFICULTY = (2 ** 512 - 1) >> (21) # difficulty level
 BLOCK_CHAIN = blockchain.BlockChain()
 NETWORK: net.Node = None
 MINER = mine.Mine()
 WALLET = wallet.Wallet()
 ALL_OUTPUTS = dict() # TODO: move the better place and file
-SOCKET_PATH = './node_socket.s'
+if OS_TYPE == 'unix':
+    SOCKET_PATH = r'.\node_socket'
+elif OS_TYPE == 'win':
+    PIPE_PATH = r'\\.\pipe\node_socket'
 
 @dataclass
 class argvOption:
@@ -30,7 +42,7 @@ class argvOption:
     is_full_node = False
     cache = 1500#kb
     mining = True
-    socket_path = SOCKET_PATH
+    socket_path = SOCKET_PATH if OS_TYPE == 'unix' else PIPE_PATH # TODO: better
 
 LOGGING_FORMAT = "%(asctime)s %(levelname)s %(message)s"
 

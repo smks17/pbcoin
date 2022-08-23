@@ -42,7 +42,7 @@ class CliCommandCode(IntEnum):
     @staticmethod
     def getCode(value: str) -> CliCommandCode:
         value = value.strip().lower()
-        assert len(CliCommandCode) == 9, "Not Implemented one or more command yet"
+        assert len(CliCommandCode) == 8, "Not Implemented one or more command yet"
         if value == 'gen-key':
             return CliCommandCode.GEN_KEY
         elif value == 'trx':
