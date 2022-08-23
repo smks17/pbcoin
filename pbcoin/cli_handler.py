@@ -81,24 +81,26 @@ class CliServer():
         elif platform == "win32":
             while True:
                 pipe = win32pipe.CreateNamedPipe(
-                    r'\\.\pipe\node_socket',
+                    self.pipe_path,
                     win32pipe.PIPE_ACCESS_DUPLEX,
-                    win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT,
-                    1,  # nMaxInstances
+                    win32pipe.PIPE_TYPE_MESSAGE |win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_NOWAIT,
+                    win32pipe.PIPE_UNLIMITED_INSTANCES,  # nMaxInstances
                     65536,  # nOutBufferSize
                     65536,  # nInBufferSize
-                    0, # 50ms timeout (the default)
+                    win32pipe.NMPWAIT_USE_DEFAULT_WAIT, # 50ms timeout (the default)
                     None # securityAttributes
                 )
+                if pipe == None:
+                    raise Exception()
                 try:
                     win32pipe.ConnectNamedPipe(pipe, None)
                     await self.handle_cli_command_win(pipe)
                 except:
-                    logging.error("cli server is broken for some reason")
+                    await asyncio.sleep(0.5)
                 finally:
                     win32file.CloseHandle(pipe)
         else:
-            raise NotImplementedError()
+            raise NotImplementedError("Your os doesn't recognize for cli api")
 
     async def parse_args(self, command: int, args: List[str]) -> Tuple[str, CliErrorCode]:
         """parse the argument base on command input from user and do the command"""
@@ -113,9 +115,9 @@ class CliServer():
                 amount = int(args[1])
             except:
                 errors |= CliErrorCode.BAD_USAGE
-                res = await pbcoin.WALLET.send_coin(recipient, amount)
-                if not res:
-                    errors |= CliErrorCode.TRX_PROBLEM
+            res = await pbcoin.WALLET.send_coin(recipient, amount)
+            if not res:
+                errors |= CliErrorCode.TRX_PROBLEM
         elif command == CliCommandCode.BALANCE:
             result += str(pbcoin.WALLET.n_amount)
         elif command == CliCommandCode.BLOCK:

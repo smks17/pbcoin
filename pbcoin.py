@@ -14,7 +14,7 @@ def usage():
     print("  --seeds <IP>:<PORT>     for connect to network of blockchain")
     print("  --full-node             keep all data of blockchain")
     print("  --cache <NUMBER>        allocate for cache (number is in kb)")
-    print("  --socket <PATH>         path make a unix/pipe(for windows) socket for cli could connect")
+    print("  --socket-path <PATH>    the node UNIX/pipe(for windows) socket path which is used for cli to connect to")
 
 def parse_argv(argv: list[str]):
     option = pbcoin.argvOption()
@@ -39,7 +39,7 @@ def parse_argv(argv: list[str]):
         elif argv[i] == '--cache':
             i += 1
             option.cache = float(argv[i])
-        elif argv[i] == '--socket':
+        elif argv[i] == '--socket-path':
             i += 1
             option.socket_path = argv[i]
         else:
