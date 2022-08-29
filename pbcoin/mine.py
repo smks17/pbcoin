@@ -5,8 +5,9 @@ from ellipticcurve.ecdsa import Ecdsa
 from ellipticcurve.publicKey import PublicKey
 from ellipticcurve.signature import Signature
 
-import pbcoin
-from pbcoin.trx import Trx
+from .constants import DIFFICULTY
+from .trx import Trx
+import pbcoin.core as core
 
 
 class Mine:
@@ -36,7 +37,7 @@ class Mine:
         self.mempool = []
 
     async def start(self):
-        self.setup_block = pbcoin.BLOCK_CHAIN.setup_new_block()
+        self.setup_block = core.BLOCK_CHAIN.setup_new_block()
         self.reset()
         logging.debug("start again mine")
         while(not self.start_over):
@@ -47,7 +48,7 @@ class Mine:
             if self.stop_mining:
                 continue
             # calculate hash and check difficulty
-            if int(self.setup_block.calculate_hash(), 16) <= pbcoin.DIFFICULTY:
+            if int(self.setup_block.calculate_hash(), 16) <= DIFFICULTY:
                 if self.start_over:
                     break
                 self.setup_block.set_mined()
@@ -57,8 +58,8 @@ class Mine:
         if self.mined_new:
             logging.info(
                 f"mined a block: {self.setup_block.get_data(True, False)}")
-            await pbcoin.NETWORK.send_mined_block(self.setup_block)
-            pbcoin.BLOCK_CHAIN.add_new_block(self.setup_block)
+            await core.NETWORK.send_mined_block(self.setup_block)
+            core.BLOCK_CHAIN.add_new_block(self.setup_block)
 
     def add_trx_to_mempool(self, trx_: Trx, sig: Signature, pub_key_: PublicKey):
         # first check sign of senders

@@ -13,31 +13,31 @@ from typing import (
     Any,
     Dict,
     List,
+    NewType,
+    Optional,
     Tuple
 )
 
 from ellipticcurve.publicKey import PublicKey
 from ellipticcurve.signature import Signature
 
-import pbcoin
-import pbcoin.block as pbBlock
-import pbcoin.blockchain as pbBlockchain
-import pbcoin.trx as trx
-
-DEFAULT_PORT = 8989
-DEFAULT_HOST = '127.0.0.1'
+import pbcoin.core as core
+from .block import Block
+from .blockchain import BlockChain
+from .trx import Coin, Trx
+from .config import NetworkCfg
+from .constants import TOTAL_NUMBER_CONNECTIONS, NETWORK_DATA_SIZE
 
 #! log not to be here
 log = logging.getLogger()
 log.setLevel(logging.DEBUG)
 
-TOTAL_NUMBER_CONNECTIONS = 2
-MAX_BYTE_SIZE = 8
-
 
 def sizeof(data):
     return '{:>08d}'.format(getsizeof(data))
 
+AsyncWriter = NewType("AsyncWriter", asyncio.StreamWriter)
+AsyncReader = NewType("AsyncReader", asyncio.StreamReader)
 
 class ConnectionCode(IntEnum):
     NEW_NEIGHBOR = auto()  # send information node as a new neighbors
@@ -69,9 +69,9 @@ class Node:
         self.ip = ip
         self.port = port
         if not self.ip:
-            self.ip = DEFAULT_HOST
+            self.ip = NetworkCfg.ip
         if not self.port:
-            self.prt = DEFAULT_PORT
+            self.prt = NetworkCfg.port
         self.uid = self.calculate_uid(ip, str(port))  # TODO: use public key
         self.neighbors: Dict[str, Tuple[str, int]] = dict()
 
@@ -79,7 +79,7 @@ class Node:
         self,
         dst_ip: str,
         dst_port: str
-    ) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    ) -> Tuple[AsyncReader, asyncio.StreamWriter]:
         """make a connection to destination ip and port and return stream reader and writer"""
         try:
             reader, writer = await asyncio.open_connection(dst_ip, int(dst_port))
@@ -123,7 +123,7 @@ class Node:
             writer.write(bytes(data.encode()))
             await writer.drain()
             if wait_for_receive:
-                size_data = await reader.read(MAX_BYTE_SIZE)
+                size_data = await reader.read(NETWORK_DATA_SIZE)
                 size_data = int(size_data)
                 rec_data = await reader.read(size_data)
                 log.debug(
@@ -153,9 +153,9 @@ class Node:
                 server.close()
                 await server.wait_closed()
 
-    async def handle_requests(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    async def handle_requests(self, reader: AsyncReader, writer: AsyncWriter):
         """ handle requests that receive from other nodes """
-        size = int(await reader.read(MAX_BYTE_SIZE))
+        size = int(await reader.read(NETWORK_DATA_SIZE))
         data = await reader.read(size)
         log.debug(f'receive data: {data.decode()}')
         data = json.loads(data.decode())
@@ -185,9 +185,9 @@ class Node:
         self.neighbors[uid] = (new_node_ip, int(new_node_port))
         log.info(f"new neighbor for {self.ip} : {new_node_ip}")
 
-    async def handle_request_new_node(self, data: Dict[str, Any], writer: asyncio.StreamWriter):
+    async def handle_request_new_node(self, data: Dict[str, Any], writer: AsyncWriter):
         """handle a new node for add to the network by finding new neighbors for it"""
-        final_request = None
+        final_request: Optional[Dict[str, any]] = None
         n_connections = data["number_connections_requests"]
         data["passed_nodes"].append(self.ip)
         final_request = {
@@ -271,7 +271,7 @@ class Node:
         writer.write(sizeof(bytes_data).encode())
         writer.write(bytes_data)
 
-    async def handle_delete_neighbor(self, data: Dict[str, Any], writer: asyncio.StreamWriter):
+    async def handle_delete_neighbor(self, data: Dict[str, Any], writer: AsyncWriter):
         """delete neighbor"""
         ip, port = data["src_ip"].split(':')
         uid = data["uid"]
@@ -290,16 +290,16 @@ class Node:
 
     async def handle_mined_block(self, data: Dict[str, Any]):
         """handle for request finder new block"""
-        pbcoin.MINER.stop_mining = True
+        core.MINER.stop_mining = True
         block_data = data['block']
         log.info(f"mine block from {data['src_ip']}: {block_data}")
-        block = pbBlock.Block.from_json_data_full(block_data)
+        block = Block.from_json_data_full(block_data)
         # checking which blockchain is longer, own or its?
-        if block.block_height > pbcoin.BLOCK_CHAIN.height:
-            number_new_blocks = block.block_height - pbcoin.BLOCK_CHAIN.height
+        if block.block_height > core.BLOCK_CHAIN.height:
+            number_new_blocks = block.block_height - core.BLOCK_CHAIN.height
             if number_new_blocks == 1:
                 # just this block is new
-                done = pbcoin.BLOCK_CHAIN.add_new_block(block)
+                done = core.BLOCK_CHAIN.add_new_block(block)
                 if done != None:
                     # TODO: send why receive data is a bad request
                     log.error(f"bad request mined block from {data['src_ip']}")
@@ -317,10 +317,10 @@ class Node:
                 res = json.loads(res.decode())
                 if res['status']:
                     blocks = res['blocks']
-                    blocks = [pbBlock.Block.from_json_data_full(
+                    blocks = [Block.from_json_data_full(
                         block) for block in blocks]
-                    pbcoin.BLOCK_CHAIN.resolve(blocks)
-                    pbcoin.MINER.start_over = True
+                    core.BLOCK_CHAIN.resolve(blocks)
+                    core.MINER.start_over = True
                 else:
                     # TODO
                     log.error("Bad request send for get blocks")
@@ -328,13 +328,13 @@ class Node:
             # TODO: current blockchain is longer so declare other for resolve that
             pass
 
-        log.debug(f"new block chian: {pbcoin.BLOCK_CHAIN.get_hashes()}")
-        pbcoin.MINER.start_over = True
+        log.debug(f"new block chian: {core.BLOCK_CHAIN.get_hashes()}")
+        core.MINER.start_over = True
 
-    async def handle_get_blocks(self, data: Dict[str, Any], writer: asyncio.StreamWriter):
+    async def handle_get_blocks(self, data: Dict[str, Any], writer: AsyncWriter):
         """handle for request another node for getting block"""
-        copy_blockchain = copy(pbcoin.BLOCK_CHAIN)
-        first_index = None
+        copy_blockchain = copy(core.BLOCK_CHAIN)
+        first_index: Optional[int] = None
         hash_block = data.pop('hash_block', None)
         if hash_block:
             first_index = copy_blockchain.search(hash_block)
@@ -366,15 +366,15 @@ class Node:
         outputs = []
         # make trx from receive data
         for in_coin in trx_inputs:
-            inputs.append(trx.Coin(
+            inputs.append(Coin(
                 in_coin["owner"], in_coin["index"], in_coin["trx_hash"], in_coin["value"]))
         for out_coin in trx_outputs:
-            outputs.append(trx.Coin(
+            outputs.append(Coin(
                 out_coin["owner"], out_coin["index"], out_coin["trx_hash"], out_coin["value"]))
         time = trx_data['time']
-        new_trx = trx.Trx(pbcoin.BLOCK_CHAIN.height, inputs, outputs, time)
+        new_trx = Trx(core.BLOCK_CHAIN.height, inputs, outputs, time)
         # add to mempool and send other nodes
-        if pbcoin.MINER.add_trx_to_mempool(new_trx, sig, pubKey):
+        if core.MINER.add_trx_to_mempool(new_trx, sig, pubKey):
             for uid in self.neighbors:
                 ip, port = self.neighbors[uid]
                 if not ip in data['passed_nodes']:
@@ -440,15 +440,15 @@ class Node:
             rec = await self.connect_and_send(ip, port, json.dumps(request_blockchain))
             rec = json.loads(rec.decode())
             if rec['status']:
-                blockchain = pbBlockchain.BlockChain.json_to_blockchain(
+                blockchain = BlockChain.json_to_blockchain(
                     rec['blocks'])
-                if pbcoin.BLOCK_CHAIN.height < blockchain.height:
-                    pbcoin.BlockChain = blockchain
+                if core.BLOCK_CHAIN.height < blockchain.height:
+                    core.BLOCK_CHAIN = blockchain
             else:
                 raise NotImplementedError()
             log.debug(f"blockchain: {rec}")
 
-    async def send_mined_block(self, block_: pbBlock.Block):
+    async def send_mined_block(self, block_: Block):
         """declare other nodes for find new block"""
         data = {
             "type": ConnectionCode.MINED_BLOCK,
@@ -462,15 +462,15 @@ class Node:
             data['dst_ip'] = ip
             await self.connect_and_send(ip, port, json.dumps(data), False)
 
-    async def send_new_trx(self, trx_: trx.Trx):
+    async def send_new_trx(self, trx_: Trx):
         """declare other neighbors new transaction for adding to mempool"""
         msg = {
             "type": ConnectionCode.ADD_TRX,
             "src_ip": f'{self.ip}:{self.port}',
             'dst_ip': '',
             "trx": trx_.get_data(with_hash=True),
-            "signature": pbcoin.WALLET.base64Sign(trx_),
-            "public_key": pbcoin.WALLET.public_key,
+            "signature": core.WALLET.base64Sign(trx_),
+            "public_key": core.WALLET.public_key,
             "passed_nodes": [self.ip]
         }
         for uid in self.neighbors:

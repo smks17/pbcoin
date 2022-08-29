@@ -9,7 +9,7 @@ if os.name == 'nt':
     import win32file
     import win32api
 
-import pbcoin
+from pbcoin.constants import OS_TYPE, DEFAULT_SOCKET_PATH
 from pbcoin.cliflag import CliCommandCode, CliErrorCode
 
 
@@ -29,7 +29,7 @@ def usage():
 
 def cli_unix(command_code, args: List[str], socket_path: Optional[str]=None):
     if socket_path == None:
-        socket_path=pbcoin.SOCKET_PATH
+        socket_path = DEFAULT_SOCKET_PATH
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock_io: IO
     try:
@@ -56,61 +56,61 @@ def cli_unix(command_code, args: List[str], socket_path: Optional[str]=None):
 
 def cli_win(command_code, args: List[str], pipe_path: Optional[str]=None):
     if pipe_path == None:
-        pipe_path=pbcoin.PIPE_PATH
+        pipe_path = DEFAULT_SOCKET_PATH
     handle = None
     while True:
-    try:
-        handle = win32file.CreateFile(
-            pipe_path,
-            win32file.GENERIC_READ | win32file.GENERIC_WRITE,  # dwDesiredAccess
-            0,  # dwShareMode
-            None,  # lpSecurityAttributes
+        try:
+            handle = win32file.CreateFile(
+                pipe_path,
+                win32file.GENERIC_READ | win32file.GENERIC_WRITE,  # dwDesiredAccess
+                0,  # dwShareMode
+                None,  # lpSecurityAttributes
                 win32file.CREATE_ALWAYS,  # dwCreationDisposition
-            0,  # dwFlagsAndAttributes
-            None
-        )
+                0,  # dwFlagsAndAttributes
+                None
+            )
             if handle == None:
                 raise Exception()
             
-        win32pipe.SetNamedPipeHandleState(
+            win32pipe.SetNamedPipeHandleState(
                 handle, win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT, None, None)
             
-    except:
+        except:
             err = win32api.GetLastError()
             if err == 2:
                 continue
             else:
-        print("ERROR: Could not connect node. node probably is not running.", file=sys.stderr)
+                print("ERROR: Could not connect node. node probably is not running.", file=sys.stderr)
                 traceback.print_exc()
 
-    try:
-        win32file.WriteFile(
-            handle, f"{command_code} {' '.join(args)}\n".encode())
-        buffer_size = 64*1024
-        _, recv = win32file.ReadFile(handle, buffer_size)
-        buffer = recv
-        while len(recv) == buffer_size:
+        try:
+            win32file.WriteFile(
+                handle, f"{command_code} {' '.join(args)}\n".encode())
+            buffer_size = 64*1024
             _, recv = win32file.ReadFile(handle, buffer_size)
-            buffer += recv
-        buffer = buffer.decode()
-        lines = buffer.split('\n')
-        result = lines[0]
-        errors = CliErrorCode(int(lines[1]))
-        if errors == CliErrorCode.NOTHING:
-            print(result)
-        else:
-            print(errors.message())
-            print()
-            print(usage())
+            buffer = recv
+            while len(recv) == buffer_size:
+                _, recv = win32file.ReadFile(handle, buffer_size)
+                buffer += recv
+            buffer = buffer.decode()
+            lines = buffer.split('\n')
+            result = lines[0]
+            errors = CliErrorCode(int(lines[1]))
+            if errors == CliErrorCode.NOTHING:
+                print(result)
+            else:
+                print(errors.message())
+                print()
+                print(usage())
             break
-    except:
+        except:
             err = win32api.GetLastError()
             if err == 109 or err == 232:
                 continue
             else:
-        print("ERROR: No response from node", file=sys.stderr)
+                print("ERROR: No response from node", file=sys.stderr)
                 print(win32api.GetLastError())
-        traceback.print_exc()
+                traceback.print_exc()
 
 
 def cli():
@@ -127,9 +127,9 @@ def cli():
     if command_str == '--help':
         usage()
     else:
-        if pbcoin.OS_TYPE == 'unix':
+        if OS_TYPE == 'unix':
             cli_unix(command_code, args, socket_path)
-        elif pbcoin.OS_TYPE == 'win':
+        elif OS_TYPE == 'win':
             cli_win(command_code, args, socket_path)
         else:
             raise NotImplementedError("Your os does not recognize")

@@ -5,14 +5,14 @@ from typing import (
     Any,
     Dict,
     List,
+    Optional,
     Tuple
 )
 from datetime import datetime
 from hashlib import sha512
 
-import pbcoin
-
-DEFAULT_SUBSIDY = 50
+from .constants import DEFAULT_SUBSIDY
+import pbcoin.core as core
 
 
 class Coin:
@@ -51,7 +51,7 @@ class Coin:
 
         return outputs, remain
 
-    def get_data(self):
+    def get_data(self) -> Dict[str, Any]:
         """
         return a dictionary that contains:
         - value: the amount of this coin
@@ -72,9 +72,9 @@ class Coin:
     def __eq__(self, __o: object) -> bool:
         return (self.trx_hash == __o.trx_hash and self.index == __o.index)
 
-    def check_input_coin(self):
+    def check_input_coin(self) -> bool:
         trx_hash_ = self.trx_hash
-        unspent = pbcoin.ALL_OUTPUTS.get(trx_hash_, None)
+        unspent = core.ALL_OUTPUTS.get(trx_hash_, None)
         if unspent:
             owner_coin = unspent[self.index]
             if owner_coin.owner == self.owner:
@@ -109,17 +109,18 @@ class Trx:
     def __init__(
         self,
         include_block_: int,
-        inputs_: List[Coin]=None,
-        outputs_: List[Coin]=None,
-        time_=None
+        inputs_: Optional[List[Coin]] = None,
+        outputs_: Optional[List[Coin]] = None,
+        time_: Optional[float] = None
     ) -> None:
         if inputs_ == None and outputs_ == None:
             self.time = datetime.utcnow().timestamp() if not time_ else time_
             self.senders = []
-            self.recipients = [pbcoin.WALLET.public_key]
+            self.recipients = [core.WALLET.public_key]
             self.value = DEFAULT_SUBSIDY
             self.hash_trx = self.calculate_hash()
-            self.outputs = [Coin(pbcoin.WALLET.public_key, 0, self.hash_trx, self.value)]
+            self.outputs = [Coin(core.WALLET.public_key, 0,
+                                 self.hash_trx, self.value)]
             self.inputs = []
             self.is_generic = True
         else:
@@ -142,7 +143,7 @@ class Trx:
     ) -> Trx:
         """
         create a transaction from sender coins
-        
+
         Args
         ----
         owner_coins: List[Coin]
@@ -165,7 +166,8 @@ class Trx:
         for coin in owner_coins:
             if coin.owner == sender_key:
                 inputs.append(coin)
-                coin_output, remain_coin = coin.make_output(recipient_key, remain)
+                coin_output, remain_coin = coin.make_output(
+                    recipient_key, remain)
                 if remain_coin <= 0:
                     remain -= coin.value
                 else:

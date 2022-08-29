@@ -13,7 +13,8 @@ if os.name == 'nt':
     import win32pipe
     import win32file
 
-import pbcoin
+import pbcoin.core as core
+from .constants import PIPE_BUFFER_SIZE
 from .cliflag import CliErrorCode, CliCommandCode
 
 class CliServer():
@@ -85,8 +86,8 @@ class CliServer():
                     win32pipe.PIPE_ACCESS_DUPLEX,
                     win32pipe.PIPE_TYPE_MESSAGE |win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_NOWAIT,
                     win32pipe.PIPE_UNLIMITED_INSTANCES,  # nMaxInstances
-                    65536,  # nOutBufferSize
-                    65536,  # nInBufferSize
+                    PIPE_BUFFER_SIZE,  # nOutBufferSize
+                    PIPE_BUFFER_SIZE,  # nInBufferSize
                     win32pipe.NMPWAIT_USE_DEFAULT_WAIT, # 50ms timeout (the default)
                     None # securityAttributes
                 )
@@ -115,24 +116,24 @@ class CliServer():
                 amount = int(args[1])
             except:
                 errors |= CliErrorCode.BAD_USAGE
-            res = await pbcoin.WALLET.send_coin(recipient, amount)
+            res = await core.WALLET.send_coin(recipient, amount)
             if not res:
                 errors |= CliErrorCode.TRX_PROBLEM
         elif command == CliCommandCode.BALANCE:
-            result += str(pbcoin.WALLET.n_amount)
+            result += str(core.WALLET.n_amount)
         elif command == CliCommandCode.BLOCK:
             try:
                 if args[0] == '--last':
-                    last_block = pbcoin.BLOCK_CHAIN.last_block
+                    last_block = core.BLOCK_CHAIN.last_block
                     if last_block:
                         block_data = last_block.get_data(is_POSIX_timestamp=False)
                         result += json.dumps(block_data)
                     else:
                         errors |= CliErrorCode.NOT_FOUND
                 else:
-                    index_block = pbcoin.BLOCK_CHAIN.search(args[0])
+                    index_block = core.BLOCK_CHAIN.search(args[0])
                     if index_block:
-                        block_data = pbcoin.BLOCK_CHAIN.blocks[index_block].getData(is_POSIX_timestamp=False)
+                        block_data = core.BLOCK_CHAIN.blocks[index_block].getData(is_POSIX_timestamp=False)
                         result += json.dumps(block_data)
                     else:
                         errors |= CliErrorCode.NOT_FOUND
@@ -140,23 +141,23 @@ class CliServer():
                 errors |= CliErrorCode.BAD_USAGE
                 traceback.print_exc()
         elif command == CliCommandCode.MEMPOOL:
-            result += str(pbcoin.MINER.mempool)
+            result += str(core.MINER.mempool)
         elif command == CliCommandCode.NEIGHBORS:
-            result += str(pbcoin.NETWORK.neighbors.values())
+            result += str(core.NETWORK.neighbors.values())
         elif command == CliCommandCode.MINING:
             arg = args.pop()
             if arg == 'on':
-                if pbcoin.MINER.stop_mining:
-                    pbcoin.MINER.stop_mining = False
+                if core.MINER.stop_mining:
+                    core.MINER.stop_mining = False
                 else:
                     errors |= CliErrorCode.MINING_ON
             elif arg == 'off':
-                if not pbcoin.MINER.stop_mining:
-                    pbcoin.MINER.stop_mining = True
+                if not core.MINER.stop_mining:
+                    core.MINER.stop_mining = True
                 else:
                     errors |= CliErrorCode.MINING_OFF
             elif arg == 'state':
-                state =  "stopped" if pbcoin.MINER.stop_mining else "running"
+                state =  "stopped" if core.MINER.stop_mining else "running"
                 result += state
             else:
                 errors |= CliErrorCode.BAD_USAGE

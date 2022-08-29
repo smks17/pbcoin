@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from hashlib import sha512
 from sys import getsizeof
+from typing import Any
 
-import pbcoin
-from pbcoin.trx import Coin, Trx
-from pbcoin.merkle_tree import MerkleTreeNode
-
+import pbcoin.core as core
+from .trx import Coin, Trx
+from .merkle_tree import MerkleTreeNode
 
 class Block:
     """
@@ -95,17 +95,17 @@ class Block:
             for coin in in_coins:
                 # check input coin and if is valid, delete from unspent coins
                 if coin.check_input_coin():
-                    unspent = pbcoin.ALL_OUTPUTS[trx_hash]
+                    unspent = core.ALL_OUTPUTS[trx_hash]
                     unspent[coin.index] = None
                     if not any(unspent):
-                        pbcoin.ALL_OUTPUTS.pop(trx_hash)
+                        core.ALL_OUTPUTS.pop(trx_hash)
                 else:
                     pass  # TODO
 
             # add output coins to unspent coins
             for coin in out_coins:
                 trx_hash = coin.trx_hash
-                pbcoin.ALL_OUTPUTS[trx_hash] = out_coins
+                core.ALL_OUTPUTS[trx_hash] = out_coins
 
     def set_nonce(self, nonce_: int): self.nonce = nonce_
 
@@ -119,7 +119,7 @@ class Block:
         self.block_hash = calculated_hash
         return calculated_hash
 
-    def get_data(self, is_full_lock=True, is_POSIX_timestamp=True) -> dict[str, any]:
+    def get_data(self, is_full_lock=True, is_POSIX_timestamp=True) -> dict[str, Any]:
         """
             get data of block that has:
                 header:

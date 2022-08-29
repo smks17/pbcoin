@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-import pbcoin
+from pbcoin.runner import run
 
 def usage():
     print("usage python pbcoin.py [option]")
@@ -17,31 +17,34 @@ def usage():
     print("  --socket-path <PATH>    the node UNIX/pipe(for windows) socket path which is used for cli to connect to")
 
 def parse_argv(argv: list[str]):
-    option = pbcoin.argvOption()
+    option = {}
     i = 1
     while i < len(argv):
         if argv[i] == '--host':
             i += 1
-            option.ip = argv[i]
+            option["ip"] = argv[i]
         elif argv[i] == '--port':
             i += 1
-            option.port = int(argv[i])
+            option["port"] = int(argv[i])
         elif argv[i] == '--seeds':
             i += 1
-            option.seeds = argv[i].split(",")
+            option["seeds"] = argv[i].split(",")
         elif argv[i] == '--help' or argv[i] == '-h':
             usage()
             sys.exit(0)
         elif argv[i] == '--debug':
-            option.debug = True
+            option["debug"] = True
         elif argv[i] == '--full-node':
-            option.is_full_node = True
+            option["is_full_node"] = True
         elif argv[i] == '--cache':
             i += 1
-            option.cache = float(argv[i])
+            option["cache"] = float(argv[i])
         elif argv[i] == '--socket-path':
             i += 1
-            option.socket_path = argv[i]
+            option["socket_path"] = argv[i]
+        elif argv[i] == '--logging-filename':
+            i += 1
+            option["logging_filename"] = argv[i]
         else:
             print(f"Error: unknown option {argv[i]}", file=sys.stderr)
             usage()
@@ -53,7 +56,7 @@ def parse_argv(argv: list[str]):
 def main():
     argv = sys.argv
     option = parse_argv(argv)
-    pbcoin.run(option)
+    run(option)
 
 if __name__ == "__main__":
     main()
