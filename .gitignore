@@ -20,3 +20,5 @@ MANIFEST
 .vscode/
 
 .key/
+
+env/
