@@ -21,9 +21,10 @@ setup(
     url="https://github.com/Esmokes17/pbcoin.git",
     author="Mahdi Kashani",
     packages=find_packages(),
-    python_requires=">=3.8, <4",
+    python_requires=">=3.8",
     install_requires=[install_requires],
-
+    setup_requires=['pytest-runner'],
+    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'node=node:main',
