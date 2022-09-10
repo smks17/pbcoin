@@ -4,8 +4,8 @@ import logging
 
 #############General################
 # For unix OS_TYPE = 'unix' and for Windows OS_TYPE = 'wim'
-if (sys.platform == 'Linux' or
-    sys.platform == 'Linux2' or
+if (sys.platform == 'linux' or
+    sys.platform == 'linux2' or
     sys.platform == 'cygwin' or
     sys.platform == 'darwin'
     ):
