@@ -2,19 +2,21 @@ from __future__ import annotations
 
 import sys
 
-from pbcoin.runner import run
+from pbcoin.config import GlobalCfg
 
 def usage():
     print("usage python pbcoin.py [option]")
     print("options:")
-    print("  --h,--help              show usage")
-    print("  --debug                 logging more things")
-    print("  --host <IPV4>           ipv4 for host")
-    print("  --port <PORT>           port number for host")
-    print("  --seeds <IP>:<PORT>     for connect to network of blockchain")
-    print("  --full-node             keep all data of blockchain")
-    print("  --cache <NUMBER>        allocate for cache (number is in kb)")
-    print("  --socket-path <PATH>    the node UNIX/pipe(for windows) socket path which is used for cli to connect to")
+    print("  --h,--help                 show usage")
+    print("  --debug                    logging more things")
+    print("  --host <IPV4>              ipv4 for host")
+    print("  --port <PORT>              port number for host")
+    print("  --seeds <IP>:<PORT>        for connect to network of blockchain")
+    print("  --full-node                keep all data of blockchain")
+    print("  --cache <NUMBER>           allocate for cache (number is in kb)")
+    print("  --socket-path <PATH>       the node UNIX/pipe(for windows) socket path which is used for cli to connect to")
+    print("  --logging-filename <PATH>  logging in this filename")
+    print("  --no-logging               no capture any logging")
 
 def parse_argv(argv: list[str]):
     option = {}
@@ -45,6 +47,8 @@ def parse_argv(argv: list[str]):
         elif argv[i] == '--logging-filename':
             i += 1
             option["logging_filename"] = argv[i]
+        elif argv[i] == '--no-logging':
+            option["logging"] = False
         else:
             print(f"Error: unknown option {argv[i]}", file=sys.stderr)
             usage()
@@ -56,7 +60,9 @@ def parse_argv(argv: list[str]):
 def main():
     argv = sys.argv
     option = parse_argv(argv)
-    run(option)
+    GlobalCfg.update(option)
+    from pbcoin.runner import run
+    run()
 
 if __name__ == "__main__":
     main()

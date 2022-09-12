@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from copy import copy
 from sys import getsizeof
 from random import shuffle
@@ -24,14 +23,13 @@ from ellipticcurve.signature import Signature
 import pbcoin.core as core
 from .block import Block
 from .blockchain import BlockChain
-from .trx import Coin, Trx
 from .config import NetworkCfg
 from .constants import TOTAL_NUMBER_CONNECTIONS, NETWORK_DATA_SIZE
+from .logger import getLogger
+from .trx import Coin, Trx
 
-#! log not to be here
-log = logging.getLogger()
-log.setLevel(logging.DEBUG)
 
+logging = getLogger(__name__)
 
 def sizeof(data):
     return '{:>08d}'.format(getsizeof(data))
@@ -83,9 +81,9 @@ class Node:
         """make a connection to destination ip and port and return stream reader and writer"""
         try:
             reader, writer = await asyncio.open_connection(dst_ip, int(dst_port))
-            log.debug(f"from {self.ip} Connect to {dst_ip}:{dst_port}")
+            logging.debug(f"from {self.ip} Connect to {dst_ip}:{dst_port}")
         except ConnectionError:
-            log.error("Error Connection", exc_info=True)
+            logging.error("Error Connection", exc_info=True)
             raise ConnectionError
         return reader, writer
 
@@ -126,12 +124,12 @@ class Node:
                 size_data = await reader.read(NETWORK_DATA_SIZE)
                 size_data = int(size_data)
                 rec_data = await reader.read(size_data)
-                log.debug(
+                logging.debug(
                     f'receive data from {dst_ip}:{dst_port} {rec_data.decode()}')
             writer.close()
             await writer.wait_closed()
         except ConnectionError:
-            log.error("Error Connection", exc_info=True)
+            logging.error("Error Connection", exc_info=True)
             raise ConnectionError
         finally:
             return rec_data
@@ -141,14 +139,14 @@ class Node:
         server = await asyncio.start_server(self.handle_requests, host=self.ip, port=self.port)
         if not server:
             raise ConnectionError
-        log.info(
+        logging.info(
             f"node connection is serve on {server.sockets[0].getsockname()}")
         loop = asyncio.get_event_loop()
         async with server:
             try:
                 await server.serve_forever()
             except:
-                log.error("connection is lost")
+                logging.error("connection is lost")
             finally:
                 server.close()
                 await server.wait_closed()
@@ -157,7 +155,7 @@ class Node:
         """ handle requests that receive from other nodes """
         size = int(await reader.read(NETWORK_DATA_SIZE))
         data = await reader.read(size)
-        log.debug(f'receive data: {data.decode()}')
+        logging.debug(f'receive data: {data.decode()}')
         data = json.loads(data.decode())
         #TODO: check that request is from neighbors or not
         _type = data['type']
@@ -183,7 +181,7 @@ class Node:
         new_node_ip, new_node_port = data["new_node"].split(":")
         uid = data["uid"]
         self.neighbors[uid] = (new_node_ip, int(new_node_port))
-        log.info(f"new neighbor for {self.ip} : {new_node_ip}")
+        logging.info(f"new neighbor for {self.ip} : {new_node_ip}")
 
     async def handle_request_new_node(self, data: Dict[str, Any], writer: AsyncWriter):
         """handle a new node for add to the network by finding new neighbors for it"""
@@ -228,7 +226,7 @@ class Node:
                         n_connections = final_request['number_connections_requests']
                     except ConnectionError:
                         # TODO: checking for connection that neighbor is online yet?
-                        log.error("", exc_info=True)
+                        logging.error("", exc_info=True)
                 if n_connections == 0:
                     break
 
@@ -250,7 +248,7 @@ class Node:
                 response = json.loads(response.decode())
                 if response['status'] == True:
                     self.neighbors.pop(uid, None)
-                    log.info(f"delete neighbor for {self.ip} : {ip}")
+                    logging.info(f"delete neighbor for {self.ip} : {ip}")
                     new_nodes = [f"{self.ip}:{self.port}", f"{ip}:{port}"]
                     final_request["p2p_nodes"] += new_nodes
                     final_request['number_connections_requests'] -= 2
@@ -282,7 +280,7 @@ class Node:
         }
         if len(self.neighbors) == TOTAL_NUMBER_CONNECTIONS:
             self.neighbors.pop(uid, None)
-            log.info(f"delete neighbor for {self.ip} : {ip}")
+            logging.info(f"delete neighbor for {self.ip} : {ip}")
             data['status'] = True
         bytes_data = json.dumps(data).encode()
         writer.write(sizeof(bytes_data).encode())
@@ -292,7 +290,7 @@ class Node:
         """handle for request finder new block"""
         core.MINER.stop_mining = True
         block_data = data['block']
-        log.info(f"mine block from {data['src_ip']}: {block_data}")
+        logging.info(f"mine block from {data['src_ip']}: {block_data}")
         block = Block.from_json_data_full(block_data)
         # checking which blockchain is longer, own or its?
         if block.block_height > core.BLOCK_CHAIN.height:
@@ -302,7 +300,7 @@ class Node:
                 done = core.BLOCK_CHAIN.add_new_block(block)
                 if done != None:
                     # TODO: send why receive data is a bad request
-                    log.error(f"bad request mined block from {data['src_ip']}")
+                    logging.error(f"bad request mined block from {data['src_ip']}")
                     pass
             else:
                 # request for get n block before this block for add to its blockchain and resolve
@@ -323,12 +321,12 @@ class Node:
                     core.MINER.start_over = True
                 else:
                     # TODO
-                    log.error("Bad request send for get blocks")
+                    logging.error("Bad request send for get blocks")
         else:
             # TODO: current blockchain is longer so declare other for resolve that
             pass
 
-        log.debug(f"new block chian: {core.BLOCK_CHAIN.get_hashes()}")
+        logging.debug(f"new block chian: {core.BLOCK_CHAIN.get_hashes()}")
         core.MINER.start_over = True
 
     async def handle_get_blocks(self, data: Dict[str, Any], writer: AsyncWriter):
@@ -342,7 +340,7 @@ class Node:
             first_index = data.pop('first_index', None)
         if first_index == None:
             # doesn't have this specific chain
-            log.error("doesn't have self chain!")
+            logging.error("doesn't have self chain!")
         else:
             request = {
                 "status": True,
@@ -427,7 +425,7 @@ class Node:
             }
             await self.connect_and_send(ip, port, json.dumps(request), False)
             self.neighbors[self.calculate_uid(ip, str(port))] = (ip, port)
-            log.info(f"new neighbors for {self.ip} : {ip}")
+            logging.info(f"new neighbors for {self.ip} : {ip}")
 
             # get block chain from other nodes
             #TODO: resolve blockchain
@@ -446,7 +444,7 @@ class Node:
                     core.BLOCK_CHAIN = blockchain
             else:
                 raise NotImplementedError()
-            log.debug(f"blockchain: {rec}")
+            logging.debug(f"blockchain: {rec}")
 
     async def send_mined_block(self, block_: Block):
         """declare other nodes for find new block"""

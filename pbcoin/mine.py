@@ -1,4 +1,3 @@
-import logging
 from copy import copy
 
 from ellipticcurve.ecdsa import Ecdsa
@@ -6,9 +5,12 @@ from ellipticcurve.publicKey import PublicKey
 from ellipticcurve.signature import Signature
 
 from .constants import DIFFICULTY
+from .logger import getLogger
 from .trx import Trx
 import pbcoin.core as core
 
+
+logging = getLogger(__name__)
 
 class Mine:
     """
@@ -56,8 +58,8 @@ class Mine:
                 break
             self.setup_block.set_nonce(self.setup_block.nonce+1)
         if self.mined_new:
-            logging.info(
-                f"mined a block: {self.setup_block.get_data(True, False)}")
+            logging.info("mined a block")
+            logging.debug(f"minede block info: {self.setup_block.get_data(True, False)}")
             await core.NETWORK.send_mined_block(self.setup_block)
             core.BLOCK_CHAIN.add_new_block(self.setup_block)
 

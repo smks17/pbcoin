@@ -53,7 +53,7 @@ PIPE_BUFFER_SIZE = 1024 * 4
 #############Logging################
 # Logging format
 DEFAULT_LOGGING_FORMAT: Final[str] = "%(asctime)s |  %(name)-18s |  %(levelname)-10s: %(message)s"
-DEFAULT_LOGGING_DATE_FORMAT: Final[str] ="%y-%m-%d %H:%M-%S"
+DEFAULT_LOGGING_DATE_FORMAT: Final[str] ="%Y-%m-%d %H:%M-%S"
 # Change logging level if debug mode is True
 DEFAULT_LOGGING_LEVEL: Final[int] = logging.INFO
 # File for write log

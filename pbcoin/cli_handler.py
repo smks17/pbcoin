@@ -4,7 +4,6 @@ import asyncio
 import json
 import socket
 import os
-import logging
 import traceback
 from sys import platform
 from typing import List, Tuple
@@ -16,6 +15,10 @@ if os.name == 'nt':
 import pbcoin.core as core
 from .constants import PIPE_BUFFER_SIZE
 from .cliflag import CliErrorCode, CliCommandCode
+from .logger import getLogger
+
+
+logging = getLogger(__name__)
 
 class CliServer():
     def __init__(self, socket_path_) -> None:

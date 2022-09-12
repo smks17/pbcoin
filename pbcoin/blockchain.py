@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from copy import deepcopy
 from functools import reduce
 from enum import Flag, auto
@@ -15,9 +14,12 @@ from typing import (
 
 from .block import Block
 from .constants import DIFFICULTY
+from .logger import getLogger
 from .trx import Trx
 import pbcoin.core as core
 
+
+logging = getLogger(__name__)
 
 class BlockValidationLevel(Flag):
     Bad = 0

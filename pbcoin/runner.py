@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import asyncio
 import sys
 from threading import Thread
@@ -12,8 +11,11 @@ from .net import Node
 from .wallet import Wallet
 from .blockchain import BlockChain
 from .mine import Mine
+from .logger import getLogger
 import pbcoin.core as core
 
+
+logging = getLogger(__name__)
 
 def create_core():
     """Create the core objects"""
@@ -37,24 +39,21 @@ async def setup_network():
     await core.NETWORK.start_up(NetworkCfg.seeds)
     cli_server = CliServer(NetworkCfg.socket_path)
     loop = asyncio.get_event_loop()
-    # network_task = loop.create_task(core.NETWORK.listen())
-    # cli_task = loop.create_task(cli_server.start())
     all_net = await asyncio.gather(core.NETWORK.listen(), cli_server.start())
     loop.run_until_complete(all_net)
 
-def run(option: Dict[str, any]):
+def run():
     """Run and start the node with option that gets"""
-    # update config from argv
-    GlobalCfg.update(option)
-    # logging
-    logging.basicConfig(format=LoggerCfg.log_format, level=LoggerCfg.log_level,
-                        filename=LoggerCfg.log_filename, filemode="w")
+
+    # Clear logfile
+    with open(LoggerCfg.log_filename, "w") as _: pass
+
     create_core()
     try:
         # network thread
-        net_thread = Thread(target=asyncio.run, args=[setup_network()])
+        net_thread = Thread(target=asyncio.run, args=[setup_network()], name="network")
         # mine thread
-        mine_thread = Thread(target=asyncio.run, args=[mine_starter()])
+        mine_thread = Thread(target=asyncio.run, args=[mine_starter()], name="mine")
         logging.debug(f"socket is made in {NetworkCfg.socket_path}")
 
         net_thread.daemon = True

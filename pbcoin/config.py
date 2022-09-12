@@ -64,6 +64,7 @@ class NetworkCfg():
 
 
 class LoggerCfg:
+    do_logging: bool
     log_format: str
     log_level: int
     log_filename: str
@@ -77,4 +78,5 @@ class LoggerCfg:
         else:
             cls.log_level = DEFAULT_LOGGING_LEVEL
         cls.log_filename = option.get("logging_filename", DEFAULT_LOGGING_FILENAME)
-        cls.log_date_format = option.get("logging_filename", DEFAULT_LOGGING_DATE_FORMAT)
+        cls.log_date_format = option.get("logging_date_format", DEFAULT_LOGGING_DATE_FORMAT)
+        cls.do_logging = option.get("logging", True)
