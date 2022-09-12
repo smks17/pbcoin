@@ -11,6 +11,7 @@ from typing import (
 from .constants import (
     DEFAULT_CACHE,
     DEFAULT_HOST,
+    DEFAULT_LOGGING_DATE_FORMAT,
     DEFAULT_LOGGING_FILENAME,
     DEFAULT_LOGGING_FORMAT,
     DEFAULT_LOGGING_LEVEL,
@@ -66,6 +67,7 @@ class LoggerCfg:
     log_format: str
     log_level: int
     log_filename: str
+    log_date_format: str
 
     @classmethod
     def update(cls, option: dict[str, Any]):
@@ -75,3 +77,4 @@ class LoggerCfg:
         else:
             cls.log_level = DEFAULT_LOGGING_LEVEL
         cls.log_filename = option.get("logging_filename", DEFAULT_LOGGING_FILENAME)
+        cls.log_date_format = option.get("logging_filename", DEFAULT_LOGGING_DATE_FORMAT)
