@@ -31,7 +31,8 @@ DIFFICULTY: Final[int] = (2 ** 512 - 1) >> (6 * 4)
 # For unix it is a path to unix socket
 # And for windows it is a path to pipe socket
 if OS_TYPE == 'unix':
-    DEFAULT_SOCKET_PATH: Final[str] = r'.\node_socket'
+    # TODO: using pathlib
+    DEFAULT_SOCKET_PATH: Final[str] = 'node_socket'
 elif OS_TYPE == 'win':
     DEFAULT_SOCKET_PATH: Final[str] = r'\\.\pipe\node_socket'
 
@@ -54,5 +55,4 @@ DEFAULT_LOGGING_FORMAT: Final[str] = "%(asctime)s %(levelname)s %(message)s"
 # Change logging level if debug mode is True
 DEFAULT_LOGGING_LEVEL: Final[int] = logging.INFO
 # File for write log
-DEFAULT_LOGGING_FILENAME = r".\pbcoin.log"
-
+DEFAULT_LOGGING_FILENAME = r"pbcoin.log" # TODO: using pathlib
