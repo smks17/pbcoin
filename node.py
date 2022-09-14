@@ -49,6 +49,9 @@ def parse_argv(argv: list[str]):
             option["logging_filename"] = argv[i]
         elif argv[i] == '--no-logging':
             option["logging"] = False
+        elif argv[i] == '--difficulty':  # For testcase
+            i += 1
+            option["difficulty"] = int(argv[i])
         else:
             print(f"Error: unknown option {argv[i]}", file=sys.stderr)
             usage()

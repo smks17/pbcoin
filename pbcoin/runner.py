@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from math import inf
 from threading import Thread
-from typing import Dict
+from typing import NewType, Union
 
-from .config import *
+from .config import GlobalCfg, NetworkCfg, LoggerCfg
 from .cli_handler import CliServer
 from .net import Node
 from .wallet import Wallet
@@ -17,52 +18,102 @@ import pbcoin.core as core
 
 logging = getLogger(__name__)
 
+
 def create_core():
     """Create the core objects"""
     core.MINER = Mine()
     core.WALLET = Wallet()
-    core.BLOCK_CHAIN = BlockChain()
+    core.BLOCK_CHAIN = BlockChain([])
 
-async def mine_starter():
-    """Set up and start mining"""
+
+inf_type = NewType("inf_type", float)
+
+
+async def mine_starter(how_many: Union[inf_type, int]=inf):
+    """Set up and start mining
+
+        how_many: it determines how many blocks should be mined.If it doesn't pass
+        then it is valued with infinity which means mining forever.
+    """
     core.WALLET.gen_key()
     logging.info(f"your public key is generated: {core.WALLET.public_key}")
     if GlobalCfg.mining:
         core.BLOCK_CHAIN.is_full_node = GlobalCfg.full_node
         core.BLOCK_CHAIN.cache = GlobalCfg.cache * 1000  # to bytes
-        while True:
-            await core.MINER.start()
+        if how_many == inf:
+            while True:
+                await core.MINER.start()
+        else:
+            for _ in range(how_many):
+                await core.MINER.start()
 
-async def setup_network():
+async def setup_network(has_cli, has_socket_network):
     """Set up network for connect other nodes and cli"""
-    core.NETWORK = Node(NetworkCfg.ip, NetworkCfg.port)
-    await core.NETWORK.start_up(NetworkCfg.seeds)
-    cli_server = CliServer(NetworkCfg.socket_path)
+    handlers = []
+    if has_socket_network:
+        core.NETWORK = Node(NetworkCfg.ip, NetworkCfg.port)
+        await core.NETWORK.start_up(NetworkCfg.seeds)
+        handlers.append(core.NETWORK.listen())
+    if has_cli:
+        cli_server = CliServer(NetworkCfg.socket_path)
+        handlers.append(cli_server.start())
     loop = asyncio.get_event_loop()
-    all_net = await asyncio.gather(core.NETWORK.listen(), cli_server.start())
+    all_net = await asyncio.gather(*handlers)
     loop.run_until_complete(all_net)
 
-def run():
-    """Run and start the node with option that gets"""
 
-    # Clear logfile
-    with open(LoggerCfg.log_filename, "w") as _: pass
+def run(raise_runtime_error=True, how_many_mine: Union[inf_type, int]=inf, reset=True) -> None:
+    """Run and start the node with option that gets
 
-    create_core()
+        Note: this function doesn't configure app
+
+        Parameters
+        ----------
+            raise_runtime_error: bool = True
+                if this is True then exit and raise threads runtime error for example KeyboardInterrupt
+            how_many_mine:  Union[inf_type, int] = inf
+                it determines how many blocks should be mined.If it doesn't pass
+                then it is valued with infinity which means mining forever.
+    """
+    if LoggerCfg.do_logging:
+        # Clear logfile
+        with open(LoggerCfg.log_filename, "w") as _:
+            pass
+    if reset:
+        create_core()
+    getLogger("asyncio", False) # for asyncio logging
     try:
+        net_thread = None
+        mine_thread = None
         # network thread
-        net_thread = Thread(target=asyncio.run, args=[setup_network()], name="network")
+        if GlobalCfg.network:
+            net_thread = Thread(target=asyncio.run,
+                args=(setup_network(NetworkCfg.cli, NetworkCfg.socket_network),),
+                kwargs={"debug": GlobalCfg.debug}, name="network", daemon=True)
+            net_thread.start()
+            logging.debug(f"socket is made in {NetworkCfg.socket_path}")
         # mine thread
-        mine_thread = Thread(target=asyncio.run, args=[mine_starter()], name="mine")
-        logging.debug(f"socket is made in {NetworkCfg.socket_path}")
+        if GlobalCfg.mining:
+            mine_thread = Thread(target=asyncio.run,
+                                args=(mine_starter(how_many_mine),),
+                                kwargs={"debug": GlobalCfg.debug},
+                                name="mining", daemon=True)
+            mine_thread.start()
 
-        net_thread.daemon = True
-        mine_thread.daemon = True
+        if raise_runtime_error:
+            while True:
+                if net_thread is not None and net_thread.is_alive():
+                    net_thread.join(0.01)
+                if mine_thread is not None and mine_thread.is_alive():
+                    mine_thread.join(0.01)
+        else:
+            if net_thread is not None:
+                net_thread.join()
+            if mine_thread is not None:
+                mine_thread.join()
 
-        net_thread.start()
-        mine_thread.start()
-        while net_thread.is_alive() and mine_thread.is_alive():
-            net_thread.join(1)
-            mine_thread.join(1)
     except KeyboardInterrupt:
         sys.exit(1)
+
+    except Exception as exception:
+        logging.critical("app was suddenly stopped", exc_info=sys.exc_info())

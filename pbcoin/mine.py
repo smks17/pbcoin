@@ -4,7 +4,7 @@ from ellipticcurve.ecdsa import Ecdsa
 from ellipticcurve.publicKey import PublicKey
 from ellipticcurve.signature import Signature
 
-from .constants import DIFFICULTY
+from .config import GlobalCfg
 from .logger import getLogger
 from .trx import Trx
 import pbcoin.core as core
@@ -50,7 +50,7 @@ class Mine:
             if self.stop_mining:
                 continue
             # calculate hash and check difficulty
-            if int(self.setup_block.calculate_hash(), 16) <= DIFFICULTY:
+            if int(self.setup_block.calculate_hash(), 16) <= GlobalCfg.difficulty:
                 if self.start_over:
                     break
                 self.setup_block.set_mined()
@@ -59,8 +59,9 @@ class Mine:
             self.setup_block.set_nonce(self.setup_block.nonce+1)
         if self.mined_new:
             logging.info("mined a block")
-            logging.debug(f"minede block info: {self.setup_block.get_data(True, False)}")
-            await core.NETWORK.send_mined_block(self.setup_block)
+            logging.debug(f"minded block info: {self.setup_block.get_data(True, False)}")
+            if GlobalCfg.network:
+                await core.NETWORK.send_mined_block(self.setup_block)
             core.BLOCK_CHAIN.add_new_block(self.setup_block)
 
     def add_trx_to_mempool(self, trx_: Trx, sig: Signature, pub_key_: PublicKey):

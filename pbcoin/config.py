@@ -18,6 +18,7 @@ from .constants import (
     DEFAULT_PORT,
     DEFAULT_SEEDS,
     DEFAULT_SOCKET_PATH,
+    DIFFICULTY,
     OS_TYPE,
 )
 
@@ -32,6 +33,8 @@ class GlobalCfg:
     mining: bool  # Set mining on or off
     cache: int
     full_node: bool  # Set full node or not
+    difficulty: int
+    network: bool  # networks(socket+cli) api is run or not
 
     @classmethod
     def update(cls, option: Dict[str, Union[bool, int]]):
@@ -39,7 +42,10 @@ class GlobalCfg:
         cls.full_node = option.get("is_full_node", False)
         cls.cache = option.get("cache", DEFAULT_CACHE)
         cls.mining = option.get("mining", True)
-        NetworkCfg.update(option)
+        cls.network = option.get("network", True)
+        cls.difficulty = option.get("difficulty", DIFFICULTY)
+        if cls.network:
+            NetworkCfg.update(option)
         LoggerCfg.update(option)
 
 
@@ -49,6 +55,8 @@ class NetworkCfg():
     port: int
     seeds: List[str]
     socket_path: str
+    cli: bool  # cli api is run or not
+    socket_network: bool  # socket network api is run or not (for connect other nodes)
 
     @classmethod
     def update(cls, option: Dict[str, Any]):
@@ -61,7 +69,8 @@ class NetworkCfg():
             cls.socket_path = option.get("socket_path", DEFAULT_SOCKET_PATH)
         else:
             cls.socket_path = None
-
+        cls.cli = option.get("cli", True)
+        cls.socket_network = option.get("socket_network", True)
 
 class LoggerCfg:
     do_logging: bool

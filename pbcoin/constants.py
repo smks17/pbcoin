@@ -21,10 +21,9 @@ DEFAULT_SUBSIDY: Final[int] = 50
 DEFAULT_CACHE: Final[int] = 1500 # kb
 
 # Difficult level
-# TODO: change DIFFICULTY every n blocks was mined
 #                       512 bit 1   left first 6 byte set 0
 #                     -----------------------------------
-DIFFICULTY: Final[int] = (2 ** 512 - 1) >> (6 * 4)
+DIFFICULTY: Final[int] = (2 ** 512 - 1) >> (5 * 4)
 
 
 # Node socket path for cli api

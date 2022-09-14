@@ -13,7 +13,7 @@ from typing import (
 )
 
 from .block import Block
-from .constants import DIFFICULTY
+from .config import GlobalCfg
 from .logger import getLogger
 from .trx import Trx
 import pbcoin.core as core
@@ -113,7 +113,7 @@ class BlockChain:
         valid = BlockValidationLevel.Bad
 
         # difficulty level
-        if int(_block.__hash__, 16) <= DIFFICULTY:
+        if int(_block.__hash__, 16) <= GlobalCfg.difficulty:
             valid = valid | BlockValidationLevel.DIFFICULTY
 
         # check all trx
