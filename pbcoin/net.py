@@ -47,6 +47,7 @@ class ConnectionCode(IntEnum):
     GET_BLOCKS = auto()  # request for get some blocks
     SEND_BLOCKS = auto()  # responds to GET_BLOCKS
     ADD_TRX = auto()  # new trx for add to mempool
+    PING = auto()  # For pinging other nodes and check connection
 
 
 class Node:
@@ -171,6 +172,8 @@ class Node:
             await self.handle_get_blocks(data, writer)
         elif _type == ConnectionCode.ADD_TRX:
             await self.handle_new_trx(data)
+        elif _type == ConnectionCode.PING:
+            await self.handle_ping(data, writer)
         else:
             raise NotImplementedError  # TODO
         writer.close()
@@ -382,6 +385,16 @@ class Node:
                     await self.connect_and_send(ip, port, json.dumps(msg), False)
         else:
             pass  # TODO
+
+    async def handle_ping(self, data: Dict[str, Any], writer: AsyncWriter):
+        bytes_data = json.dumps({
+            "status": True,
+            "src_ip": self.ip,
+            "dst_ip": data["src_ip"],
+        }).encode()
+        writer.write(sizeof(bytes_data).encode())
+        writer.write(bytes_data)
+        await writer.drain()
 
     async def start_up(self, seeds: List[str]):
         """begin to find new neighbors and connect to the blockchain network"""
