@@ -137,20 +137,34 @@ class Node:
 
     async def listen(self):
         """start listening requests from other nodes and callback handle_requests"""
-        server = await asyncio.start_server(self.handle_requests, host=self.ip, port=self.port)
-        if not server:
+        self.server = await asyncio.start_server(
+            self.handle_requests, host=self.ip, port=self.port)
+        if not self.server:
             raise ConnectionError
         logging.info(
-            f"node connection is serve on {server.sockets[0].getsockname()}")
-        loop = asyncio.get_event_loop()
-        async with server:
+            f"node connection is serve on {self.server.sockets[0].getsockname()}")
+        async with self.server:
             try:
-                await server.serve_forever()
+                self.is_listening = True
+                await self.server.serve_forever()
             except:
-                logging.error("connection is lost")
+                logging.error("Serving is broken")
             finally:
-                server.close()
-                await server.wait_closed()
+                self.close()
+                await self.server.wait_closed()
+
+    def reset(self, close=True):
+        """delete its neighbors and is close is True close the listening"""
+        self.neighbors = dict()
+        if close:
+            self.close()
+            self.is_listening = False
+
+    def close(self):
+        """close the listening from other nodes"""
+        if self.is_listening:
+            self.server.close()
+            self.is_listening = False
 
     async def handle_requests(self, reader: AsyncReader, writer: AsyncWriter):
         """ handle requests that receive from other nodes """
