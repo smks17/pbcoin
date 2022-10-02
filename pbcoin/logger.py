@@ -1,6 +1,7 @@
 import logging
+from typing import Optional
 
-from .config import LoggerCfg
+from .config import GlobalCfg, LoggerCfg
 
 class TracebackInfoFilter(logging.Filter):
     """Clear or restore the exception on log records"""
@@ -17,10 +18,17 @@ class TracebackInfoFilter(logging.Filter):
         return True
 
 
-def getLogger(name: str, do_logging=LoggerCfg.do_logging):
+def getLogger(name: str, do_logging: Optional[bool]=None):
     logger = logging.getLogger(name)
-    if not do_logging:
+    if GlobalCfg.config:
+        if do_logging is None:
+            logger.disabled = not LoggerCfg.do_logging
+        else:
+            logger.disabled = not do_logging
+    else:
         logger.disabled = True
+        return logger
+
     logger.setLevel(logging.DEBUG)
     
     formatter = logging.Formatter(LoggerCfg.log_format, datefmt=LoggerCfg.log_date_format)

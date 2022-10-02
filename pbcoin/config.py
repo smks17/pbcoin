@@ -29,6 +29,7 @@ __all__ = [
 ]
 
 class GlobalCfg:
+    config = False
     debug: bool  # Logging more in debug mode
     mining: bool  # Set mining on or off
     cache: int
@@ -47,6 +48,7 @@ class GlobalCfg:
         if cls.network:
             NetworkCfg.update(option)
         LoggerCfg.update(option)
+        cls.config = True
 
 
 # Configs that are related to connection other nodes and cli
