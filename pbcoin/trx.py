@@ -12,7 +12,6 @@ from datetime import datetime
 from hashlib import sha512
 
 from .constants import DEFAULT_SUBSIDY
-import pbcoin.core as core
 
 
 class Coin:
@@ -66,22 +65,26 @@ class Coin:
             "index": self.index
         }
 
-    def __repr__(self):
-        return f"{self.owner} {self.value}"
-
     def __eq__(self, __o: object) -> bool:
-        return (self.trx_hash == __o.trx_hash and self.index == __o.index)
+        return (self.trx_hash == __o.trx_hash
+            and self.index == __o.index
+            and self.owner == __o.owner
+            and self.value == __o.value)
 
-    def check_input_coin(self) -> bool:
+    def __repr__(self) -> str:
+        return f"{self.value} from {self.owner[:8]} in transaction {self.trx_hash[:8]} with index {self.index}"
+
+    def check_input_coin(self, unspent_coins: dict[str, Coin]) -> bool:
         trx_hash_ = self.trx_hash
-        unspent = core.ALL_OUTPUTS.get(trx_hash_, None)
-        if unspent:
-            owner_coin = unspent[self.index]
+        my_unspent = unspent_coins.get(trx_hash_, None)
+        if my_unspent is not None:
+            owner_coin = my_unspent[self.index]
             if owner_coin.owner == self.owner:
                 return True
             else:
                 return False
-
+        else:
+            return False
 
 class Trx:
     """Transaction class
@@ -104,27 +107,28 @@ class Trx:
             include_block: str
                 in which block is this trx was mined? it is a hex hash of a block
                 in blockchain which was mined transaction in
+            sender_key: str
+                Public key who make this transaction
     """
 
     def __init__(
         self,
         include_block_: int,
+        sender_key: str,
         inputs_: Optional[List[Coin]] = None,
         outputs_: Optional[List[Coin]] = None,
-        time_: Optional[float] = None
+        time_: Optional[float] = None, 
     ) -> None:
+        self.time = datetime.utcnow().timestamp() if not time_ else time_
         if inputs_ == None and outputs_ == None:
-            self.time = datetime.utcnow().timestamp() if not time_ else time_
             self.senders = []
-            self.recipients = [core.WALLET.public_key]
+            self.recipients = [sender_key]
             self.value = DEFAULT_SUBSIDY
             self.hash_trx = self.calculate_hash()
-            self.outputs = [Coin(core.WALLET.public_key, 0,
-                                 self.hash_trx, self.value)]
+            self.outputs = [Coin(sender_key, 0, self.hash_trx, self.value)]
             self.inputs = []
             self.is_generic = True
         else:
-            self.time = datetime.utcnow().timestamp() if not time_ else time_
             self.senders = [in_coin.owner for in_coin in inputs_]
             self.recipients = [out_coin.owner for out_coin in outputs_]
             self.value = sum(coin.value for coin in outputs_)
@@ -132,6 +136,7 @@ class Trx:
             self.inputs = inputs_  # TODO: check input not to be empty
             self.outputs = outputs_
             self.is_generic = False
+        self.public_key = sender_key # TODO: should be lists
         self.include_block = include_block_
 
     @staticmethod
@@ -178,7 +183,7 @@ class Trx:
 
         if remain != 0:
             return None
-        trx = Trx(0, inputs, outputs)
+        trx = Trx(0, sender_key, inputs, outputs)
         trx.set_hash_coins()
         return trx
 
@@ -221,7 +226,7 @@ class Trx:
             'outputs': [out_coin.get_data() for out_coin in self.outputs],
             'value': self.value,
             'time': self.time if is_POSIX_timestamp else datetime.fromtimestamp(self.time),
-            'include_block': self.include_block
+            'include_block': self.include_block,
         }
         if with_hash:
             data['hash'] = self.__hash__
