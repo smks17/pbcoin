@@ -3,9 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from hashlib import sha512
 from sys import getsizeof
-from typing import Any
+from typing import Any, Optional
 
-import pbcoin.core as core
 from .trx import Coin, Trx
 from .merkle_tree import MerkleTreeNode
 
@@ -36,17 +35,21 @@ class Block:
             a object of MerkleTree class of root
     """
 
-    def __init__(self, preHash: str, block_height: int):
+    def __init__(self, preHash: str, block_height: int, subsidy: Optional[Trx] = None):
         self.previous_hash = preHash
         self.block_height = block_height
         self.nonce = 0
         # make subsidy trx (a trx that give itself reward for mine block)
-        subsidy = Trx(self.block_height)
-        self.transactions = [subsidy]
-        self.merkle_tree = self.build_merkle_tree()
+        if subsidy is not None:
+            self.transactions = [subsidy]
+            self.merkle_tree = self.build_merkle_tree()
+        else:
+            self.transactions = []
 
     def add_trx(self, trx_: Trx) -> None:
         """ add new trx without checking to block """
+        for coin in trx_.outputs:
+            coin.trx_hash = self.__hash__
         self.transactions.append(trx_)
         # TODO: implement add function in merkle tree
         self.build_merkle_tree()
@@ -63,7 +66,7 @@ class Block:
         self.time = datetime.utcnow().timestamp()
         self.is_mined = True
 
-    def check_trx(self) -> bool:
+    def check_trx(self, unspent_coins: dict[str, Coin]) -> bool:
         """checking the all block trx"""
         # TODO: return validation
         for index, trx in enumerate(self.transactions):
@@ -71,7 +74,7 @@ class Block:
             out_coins = trx.outputs
             for coin in in_coins:
                 # is input coin trx valid
-                if not coin.check_input_coin():
+                if coin is not None and not coin.check_input_coin(unspent_coins):
                     return False
             if index != 0:
                 # check equal input and output value
@@ -87,25 +90,26 @@ class Block:
                 return False
         return True
 
-    def update_outputs(self) -> None:
-        """update "database" of output coins that are unspent"""
+    def update_outputs(self, unspent_coins: dict[str, Coin]) -> None:
+        """update "database"(TODO) of output coins that are unspent"""
         for trx in self.transactions:
             in_coins = trx.inputs
             out_coins = trx.outputs
             for coin in in_coins:
                 # check input coin and if is valid, delete from unspent coins
-                if coin.check_input_coin():
-                    unspent = core.ALL_OUTPUTS[trx_hash]
-                    unspent[coin.index] = None
-                    if not any(unspent):
-                        core.ALL_OUTPUTS.pop(trx_hash)
+                if coin.check_input_coin(unspent_coins):
+                    my_unspent = unspent_coins[coin.trx_hash]
+                    my_unspent[coin.index] = None
+                    if not any(my_unspent):
+                        # delete input coin from unspent_coins coins
+                        unspent_coins.pop(coin.trx_hash)
                 else:
                     pass  # TODO
 
             # add output coins to unspent coins
             for coin in out_coins:
                 trx_hash = coin.trx_hash
-                core.ALL_OUTPUTS[trx_hash] = out_coins
+                unspent_coins[trx_hash] = out_coins
 
     def set_nonce(self, nonce_: int): self.nonce = nonce_
 
@@ -210,14 +214,14 @@ class Block:
                     )
                 )
             trxList_.append(
-                Trx(new_block.block_height, inputs, outputs, each_trx['time'])
+                Trx(new_block.block_height, "", inputs, outputs, each_trx['time'])
             )
         new_block.transactions = trxList_
         return new_block
 
     @property
     def __hash__(self):
-        return self.calculate_hash() if self.block_hash == None else self.block_hash
+        return self.block_hash if (hasattr(self, 'block_hash') and self.block_hash is not None) else self.calculate_hash()
 
     def __str__(self) -> str:
         return self.transactions.__str__() + str(self.proof) + self.previous_hash

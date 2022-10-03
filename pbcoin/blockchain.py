@@ -14,12 +14,9 @@ from typing import (
 
 from .block import Block
 from .config import GlobalCfg
-from .logger import getLogger
-from .trx import Trx
-import pbcoin.core as core
+from .trx import Coin, Trx
+from .wallet import Wallet
 
-
-logging = getLogger(__name__)
 
 class BlockValidationLevel(Flag):
     Bad = 0
@@ -53,10 +50,10 @@ class BlockChain:
         (it is in kb)
     """
 
-    def __init__(self, blockchain_=[]):
-        self.blocks = blockchain_
+    def __init__(self, blocks=[]):
+        self.blocks = blocks
 
-    def setup_new_block(self, mempool: List[Trx] = []):
+    def setup_new_block(self, subsidy: Trx, mempool: List[Trx] = []):
         """set up a new block in chain for mine"""
         if len(self.blocks) == 0:
             # TODO: check from other nodes because blockchain class delete blocks from large chain
@@ -67,25 +64,25 @@ class BlockChain:
             previous_hash = self.last_block.__hash__
             height = self.height + 1
 
-        block = Block(previous_hash, height)
+        block = Block(previous_hash, height, subsidy=subsidy)
 
         # add remain transactions in mempool to next block
         for trx in mempool:
             block.add_trx(trx)
         return block
 
-    def add_new_block(self, block_: Block) -> Optional[BlockValidationLevel]:
-        validation = self.is_valid_block(block_)
+    def add_new_block(self, block_: Block, unspent_coins: Dict[str, Coin],
+                    update_balance = True, wallet: Optional[Wallet] = None
+                    ) -> Optional[BlockValidationLevel]:
+        validation = self.is_valid_block(block_, unspent_coins)
         if validation == BlockValidationLevel.ALL():
             self.blocks.append(deepcopy(block_))
-            Block.update_outputs(deepcopy(block_))
-            logging.debug(f"new blockchain: {core.BLOCK_CHAIN.get_hashes()}")
-            core.WALLET.updateBalance(deepcopy(block_.transactions))
-        else:
-            return validation
-
+            Block.update_outputs(deepcopy(block_), unspent_coins)
+            if update_balance:
+                wallet.updateBalance(deepcopy(block_.transactions))
         if (not self.is_full_node) and (self.__sizeof__() >= self.cache):
             self.blocks.pop(0)
+        return validation
 
     def resolve(self, new_blocks: List[Block]) -> None:
         if not BlockChain.isValidHashChain(new_blocks):
@@ -108,7 +105,7 @@ class BlockChain:
             return None  # bad request
         return self.blocks[-number:]
 
-    def is_valid_block(self, _block: Block) -> BlockValidationLevel:
+    def is_valid_block(self, _block: Block, unspent_coins: Dict[str, Coin]) -> BlockValidationLevel:
         """checking validation and return validation level"""
         valid = BlockValidationLevel.Bad
 
@@ -117,7 +114,7 @@ class BlockChain:
             valid = valid | BlockValidationLevel.DIFFICULTY
 
         # check all trx
-        if _block.check_trx():
+        if _block.check_trx(unspent_coins):
             valid = valid | BlockValidationLevel.TRX
 
         # check previous hash

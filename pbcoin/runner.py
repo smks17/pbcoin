@@ -21,9 +21,9 @@ logging = getLogger(__name__)
 
 def create_core():
     """Create the core objects"""
-    core.MINER = Mine()
     core.WALLET = Wallet()
     core.BLOCK_CHAIN = BlockChain([])
+    core.MINER = Mine(core.BLOCK_CHAIN, core.NETWORK)
 
 
 inf_type = NewType("inf_type", float)
@@ -53,6 +53,7 @@ async def setup_network(has_cli, has_socket_network):
     if has_socket_network:
         core.NETWORK = Node(NetworkCfg.ip, NetworkCfg.port)
         await core.NETWORK.start_up(NetworkCfg.seeds)
+        core.MINER.node = core.NETWORK
         handlers.append(core.NETWORK.listen())
     if has_cli:
         cli_server = CliServer(NetworkCfg.socket_path)

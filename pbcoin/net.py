@@ -22,7 +22,7 @@ from ellipticcurve.signature import Signature
 
 import pbcoin.core as core
 from .block import Block
-from .blockchain import BlockChain
+from .blockchain import BlockChain, BlockValidationLevel
 from .config import NetworkCfg
 from .constants import TOTAL_NUMBER_CONNECTIONS, NETWORK_DATA_SIZE
 from .logger import getLogger
@@ -73,6 +73,7 @@ class Node:
             self.prt = NetworkCfg.port
         self.uid = self.calculate_uid(ip, str(port))  # TODO: use public key
         self.neighbors: Dict[str, Tuple[str, int]] = dict()
+        self.is_listening = False
 
     async def connect_to(
         self,
@@ -130,8 +131,11 @@ class Node:
             writer.close()
             await writer.wait_closed()
         except ConnectionError:
-            logging.error("Error Connection", exc_info=True)
+            logging.error("Error Connection error", exc_info=True)
             raise ConnectionError
+        except Exception as exception:
+            logging.error(
+                f"Problem in sending and receiving from {dst_ip}", exc_info=True)
         finally:
             return rec_data
 
@@ -150,8 +154,8 @@ class Node:
             except:
                 logging.error("Serving is broken")
             finally:
-                self.close()
-                await self.server.wait_closed()
+                # await self.server.wait_closed()
+                self.is_listening = False
 
     def reset(self, close=True):
         """delete its neighbors and is close is True close the listening"""
@@ -307,18 +311,22 @@ class Node:
         """handle for request finder new block"""
         core.MINER.stop_mining = True
         block_data = data['block']
-        logging.info(f"mine block from {data['src_ip']}: {block_data}")
+        logging.debug(f"mine block from {data['src_ip']}: {block_data}")
         block = Block.from_json_data_full(block_data)
         # checking which blockchain is longer, own or its?
         if block.block_height > core.BLOCK_CHAIN.height:
             number_new_blocks = block.block_height - core.BLOCK_CHAIN.height
             if number_new_blocks == 1:
                 # just this block is new
-                done = core.BLOCK_CHAIN.add_new_block(block)
-                if done != None:
+                done = core.BLOCK_CHAIN.add_new_block(
+                    block, core.ALL_OUTPUTS, wallet=core.WALLET)
+                if done != BlockValidationLevel.ALL():
                     # TODO: send why receive data is a bad request
-                    logging.error(f"bad request mined block from {data['src_ip']}")
-                    pass
+                    logging.error(f"Bad request mined block from {data['src_ip']} validation: {done}")
+                else:
+                    logging.info(f"New mined block from {data['src_ip']}")
+                    logging.debug(
+                        f"info mined block from {data['src_ip']}: {block.get_data()}")
             else:
                 # request for get n block before this block for add to its blockchain and resolve
                 request = {
@@ -341,6 +349,7 @@ class Node:
                     logging.error("Bad request send for get blocks")
         else:
             # TODO: current blockchain is longer so declare other for resolve that
+            logging.error("Not implemented resolve shorter blockchain")
             pass
 
         logging.debug(f"new block chian: {core.BLOCK_CHAIN.get_hashes()}")
@@ -387,7 +396,8 @@ class Node:
             outputs.append(Coin(
                 out_coin["owner"], out_coin["index"], out_coin["trx_hash"], out_coin["value"]))
         time = trx_data['time']
-        new_trx = Trx(core.BLOCK_CHAIN.height, inputs, outputs, time)
+        new_trx = Trx(
+            core.BLOCK_CHAIN.height, core.WALLET.public_key, inputs, outputs, time)
         # add to mempool and send other nodes
         if core.MINER.add_trx_to_mempool(new_trx, sig, pubKey):
             for uid in self.neighbors:
@@ -410,7 +420,7 @@ class Node:
         writer.write(bytes_data)
         await writer.drain()
 
-    async def start_up(self, seeds: List[str]):
+    async def start_up(self, seeds: List[str], get_blockchain = True):
         """begin to find new neighbors and connect to the blockchain network"""
         nodes = []
         for seed in seeds:
@@ -451,27 +461,28 @@ class Node:
                 "new_node": f"{self.ip}:{self.port}"
             }
             await self.connect_and_send(ip, port, json.dumps(request), False)
-            self.neighbors[self.calculate_uid(ip, str(port))] = (ip, port)
+            self.neighbors[self.calculate_uid(ip, str(port))] = (ip, int(port))
             logging.info(f"new neighbors for {self.ip} : {ip}")
 
-            # get block chain from other nodes
-            #TODO: resolve blockchain
-            request_blockchain = {
-                "type": ConnectionCode.GET_BLOCKS,
-                "src_ip": f'{self.ip}:{self.port}',
-                "dst_ip": node,
-                'first_index': 0  # zero means whole blockchain
-            }
-            rec = await self.connect_and_send(ip, port, json.dumps(request_blockchain))
-            rec = json.loads(rec.decode())
-            if rec['status']:
-                blockchain = BlockChain.json_to_blockchain(
-                    rec['blocks'])
-                if core.BLOCK_CHAIN.height < blockchain.height:
-                    core.BLOCK_CHAIN = blockchain
-            else:
-                raise NotImplementedError()
-            logging.debug(f"blockchain: {rec}")
+            if get_blockchain:
+                # get block chain from other nodes
+                #TODO: resolve blockchain
+                request_blockchain = {
+                    "type": ConnectionCode.GET_BLOCKS,
+                    "src_ip": f'{self.ip}:{self.port}',
+                    "dst_ip": node,
+                    'first_index': 0  # zero means whole blockchain
+                }
+                rec = await self.connect_and_send(ip, port, json.dumps(request_blockchain))
+                rec = json.loads(rec.decode())
+                if rec['status']:
+                    blockchain = BlockChain.json_to_blockchain(
+                        rec['blocks'])
+                    if core.BLOCK_CHAIN.height < blockchain.height:
+                        core.BLOCK_CHAIN = blockchain
+                else:
+                    raise NotImplementedError()
+                logging.debug(f"blockchain: {rec}")
 
     async def send_mined_block(self, block_: Block):
         """declare other nodes for find new block"""

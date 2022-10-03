@@ -21,9 +21,9 @@ DEFAULT_SUBSIDY: Final[int] = 50
 DEFAULT_CACHE: Final[int] = 1500 # kb
 
 # Difficult level
-#                       512 bit 1   left first 6 byte set 0
+#                       512 bit 1   left first 22 bit set 0
 #                     -----------------------------------
-DIFFICULTY: Final[int] = (2 ** 512 - 1) >> (5 * 4)
+DIFFICULTY: Final[int] = (2 ** 512 - 1) >> (22)
 
 
 # Node socket path for cli api

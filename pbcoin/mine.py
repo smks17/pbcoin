@@ -1,11 +1,14 @@
 from copy import copy
+from typing import List, Optional, Union
 
 from ellipticcurve.ecdsa import Ecdsa
 from ellipticcurve.publicKey import PublicKey
 from ellipticcurve.signature import Signature
 
+from .blockchain import BlockChain
 from .config import GlobalCfg
 from .logger import getLogger
+from .net import Node
 from .trx import Trx
 import pbcoin.core as core
 
@@ -24,11 +27,20 @@ class Mine:
             stop mining until it is False
         reset_nonce: bool = False
             if true it changes the nonce value to 0 and then starts to continue mining
+        blockchain: BlockChain
+            a Blockchain object (often from core.py)
+        node: Node
+            a Node object from net.py
         mempool: list[Trx]
             the list of transactions that should has been mined
     """
-    def __init__(self):
+    def __init__(self, blockchain_: Union[BlockChain, List],
+                node_: Node = None, mempool_: List[Trx] = []):
         self.reset()
+        self.blockchain = blockchain_
+        self.node = node_
+        self.mempool = mempool_
+
 
     def reset(self):
         """reset mine parameter for start again mining for next block"""
@@ -38,8 +50,25 @@ class Mine:
         self.reset_nonce = False
         self.mempool = []
 
-    async def start(self):
-        self.setup_block = core.BLOCK_CHAIN.setup_new_block()
+    async def start(self, setup_block: Optional[BlockChain] = None) -> None:
+        """Start mining for new block and send to other nodes
+        from network if it is setup
+        
+        Args
+        ----
+        setup_block: Optional[BlockChain] = None
+            the specific block to find its nonce and
+            send to other nodes. If it is None then get
+            from blockchain object
+        """
+        if setup_block is not None:
+            self.setup_block = setup_block
+        elif type(self.blockchain) is BlockChain:
+            subsidy = Trx(core.BLOCK_CHAIN.height, core.WALLET.public_key)
+            self.setup_block = self.blockchain.setup_new_block(
+                mempool=self.mempool, subsidy=subsidy)
+        else:
+            raise Exception("Mine needs to setup block")
         self.reset()
         logging.debug("start again mine")
         while(not self.start_over):
@@ -58,18 +87,30 @@ class Mine:
                 break
             self.setup_block.set_nonce(self.setup_block.nonce+1)
         if self.mined_new:
-            logging.info("mined a block")
+            logging.info("A Block was mined")
             logging.debug(f"minded block info: {self.setup_block.get_data(True, False)}")
-            if GlobalCfg.network:
-                await core.NETWORK.send_mined_block(self.setup_block)
-            core.BLOCK_CHAIN.add_new_block(self.setup_block)
+            if GlobalCfg.network and self.node is not None:
+                await self.node.send_mined_block(self.setup_block)
+            if type(self.blockchain) is BlockChain:
+                self.blockchain.add_new_block(
+                    self.setup_block, core.ALL_OUTPUTS, wallet=core.WALLET)
+                logging.debug(f"New blockchain: {self.blockchain.get_hashes()}")
+            else:
+                self.blockchain.append(self.setup_block)
+                logging.debug("New blockchain: ",
+                            [block.get_hashes() for block in self.blockchain])
+
 
     def add_trx_to_mempool(self, trx_: Trx, sig: Signature, pub_key_: PublicKey):
         # first check sign of senders
         if Ecdsa.verify(trx_.__hash__, sig, pub_key_):
+            if not self.setup_block.check_trx(core.ALL_OUTPUTS):
+                return False
             self.mempool.append(copy(trx_))
             self.setup_block.add_trx(copy(trx_))
             # self.reset_nonce = True
+            logging.debug(
+                f"A trx was added to mempool:{trx_.get_data(is_POSIX_timestamp=False)}")
             return True
         else:
             return False
