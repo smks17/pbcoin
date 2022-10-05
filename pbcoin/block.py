@@ -1,4 +1,5 @@
 from __future__ import annotations
+from copy import deepcopy
 
 from datetime import datetime
 from hashlib import sha512
@@ -45,14 +46,16 @@ class Block:
             self.merkle_tree = self.build_merkle_tree()
         else:
             self.transactions = []
+            self.merkle_tree = None
 
     def add_trx(self, trx_: Trx) -> None:
         """ add new trx without checking to block """
-        for coin in trx_.outputs:
-            coin.trx_hash = self.__hash__
         self.transactions.append(trx_)
         # TODO: implement add function in merkle tree
         self.build_merkle_tree()
+        self.calculate_hash()
+        for coin in trx_.outputs:
+            coin.trx_hash = trx_.__hash__
 
     def get_list_hashes_trx(self) -> list[str]:
         return [trx.hash_trx for trx in self.transactions]
@@ -109,12 +112,12 @@ class Block:
             # add output coins to unspent coins
             for coin in out_coins:
                 trx_hash = coin.trx_hash
-                unspent_coins[trx_hash] = out_coins
+                unspent_coins[trx_hash] = deepcopy(out_coins)
 
     def set_nonce(self, nonce_: int): self.nonce = nonce_
 
     def calculate_hash(self) -> str:
-        if not self.merkle_tree:
+        if self.merkle_tree is None:
             self.build_merkle_tree()
         nonce_hash = sha512(str(self.nonce).encode()).hexdigest()
         calculated_hash = sha512(

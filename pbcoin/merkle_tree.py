@@ -50,6 +50,8 @@ class MerkleTreeNode:
     @staticmethod
     def build_merkle_tree(values: list[str]) -> 'MerkleTreeNode':
         """make merkle tree from _values that are hashes of trx"""
+        if len(values) == 0:
+            return MerkleTreeNode()
         values = values.copy()
         # make a queue MerkleTreeNodes from hash values
         q = queue.Queue(len(values))
