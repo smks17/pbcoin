@@ -342,8 +342,11 @@ class Node:
                     blocks = res['blocks']
                     blocks = [Block.from_json_data_full(
                         block) for block in blocks]
-                    core.BLOCK_CHAIN.resolve(blocks)
-                    core.MINER.start_over = True
+                    result = core.BLOCK_CHAIN.resolve(blocks, core.ALL_OUTPUTS)
+                    if result[0] == True:
+                        core.MINER.start_over = True
+                    else:
+                        pass # TODO: send back to node
                 else:
                     # TODO
                     logging.error("Bad request send for get blocks")

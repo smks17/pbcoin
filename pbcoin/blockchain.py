@@ -1,39 +1,19 @@
 from __future__ import annotations
 
-from copy import deepcopy
-from functools import reduce
-from enum import Flag, auto
-from operator import or_ as _or_
+from copy import copy, deepcopy
 from sys import getsizeof
 from typing import (
     Any,
     Dict,
     List,
-    Optional
+    Optional,
+    Tuple,
 )
 
-from .block import Block
+from .block import Block, BlockValidationLevel
 from .config import GlobalCfg
 from .trx import Coin, Trx
 from .wallet import Wallet
-
-
-class BlockValidationLevel(Flag):
-    Bad = 0
-    DIFFICULTY = auto()
-    TRX = auto()
-    PREVIOUS_HASH = auto()
-
-    @classmethod
-    def ALL(cls):
-        """ get variable with all flag for checking validation """
-        cls_name = cls.__name__
-        if not len(cls):
-            raise AttributeError(
-                f'empty {cls_name} does not have an ALL value')
-        value = cls(reduce(_or_, cls))
-        cls._member_map_['ALL'] = value
-        return value
 
 
 class BlockChain:
@@ -50,20 +30,17 @@ class BlockChain:
         (it is in kb)
     """
 
-    def __init__(self, blocks=[]):
+    def __init__(self, blocks = [], full_node = True):
         self.blocks = blocks
+        self.is_full_node = full_node
+        if not self.is_full_node:
+            self.cache = GlobalCfg.cache
 
     def setup_new_block(self, subsidy: Trx, mempool: List[Trx] = []):
         """set up a new block in chain for mine"""
-        if len(self.blocks) == 0:
-            # TODO: check from other nodes because blockchain class delete blocks from large chain
-            # generic block
-            previous_hash = ""
-            height = 1
-        else:
-            previous_hash = self.last_block.__hash__
-            height = self.height + 1
-
+        # TODO: checking from other nodes if this node is not a full node
+        previous_hash = self.last_block_hash
+        height = self.height + 1
         block = Block(previous_hash, height, subsidy=subsidy)
 
         # add remain transactions in mempool to next block
@@ -72,10 +49,11 @@ class BlockChain:
         return block
 
     def add_new_block(self, block_: Block, unspent_coins: Dict[str, Coin],
-                    update_balance = True, wallet: Optional[Wallet] = None
+                    update_balance = True, wallet: Optional[Wallet] = None,
+                    ignore_validation=False
                     ) -> Optional[BlockValidationLevel]:
-        validation = self.is_valid_block(block_, unspent_coins)
-        if validation == BlockValidationLevel.ALL():
+        validation = block_.is_valid_block(unspent_coins, pre_hash=self.last_block_hash)
+        if ignore_validation or validation == BlockValidationLevel.ALL():
             self.blocks.append(deepcopy(block_))
             Block.update_outputs(deepcopy(block_), unspent_coins)
             if update_balance:
@@ -84,19 +62,66 @@ class BlockChain:
             self.blocks.pop(0)
         return validation
 
-    def resolve(self, new_blocks: List[Block]) -> None:
-        if not BlockChain.isValidHashChain(new_blocks):
-            return Exception
+    def resolve(
+        self,
+        new_blocks: List[Block],
+        unspent_coins: Dict[str, Coin]
+    ) -> Tuple[bool, Optional[int]]:
+        """resolve the this blockchain with new blocks
 
+        Args
+        ----
+        new_block: List[Blocks]
+            list of new blocks for resolve and add to this blockchain
+        unspent_coins: Dict[str, Coin]
+            a data from unspent coin for update after resolve
+
+        Return
+        ------
+        Tuple[bool, Optional[int]]:
+            return a tuple which the first is to determine does resolving could do or not 
+            and the second one is the index of block in new_blocks that has a problem, if
+            it resolves with no problem, the second one is None
+        """
+        copy_unspent_coins = copy(unspent_coins)
+        result = BlockChain.check_blockchain(new_blocks, copy_unspent_coins)
+        if not result[0]:
+            return result
+        self_blockchain_index, new_blockchain_index = self.find_different(new_blocks)
+        for i in range(self_blockchain_index):
+            self.blocks[-i].revert_outputs(copy_unspent_coins)
+            self.blocks.pop()
         # TODO: update outputs coins
-        for i in range(len(self.blocks)-1, -1, -1):
-            if new_blocks[0].block_height > self.blocks[i].block_height:
-                if self.blocks[i].__hash__ != new_blocks[0].__hash__:
-                    return Exception
-                self.blocks = self.blocks[:-i+1]
-                self.blocks += new_blocks
-                while (not self.is_full_node) and (self.__sizeof__() >= self.cache):
-                    self.blocks.pop(0)
+        for trx_hash in copy_unspent_coins:
+            unspent_coins[trx_hash] = copy_unspent_coins[trx_hash]
+        for i in range(new_blockchain_index, 0, -1):
+            new_blocks[len(new_blocks) - i].update_outputs(unspent_coins)
+            self.blocks.append(new_blocks[len(new_blocks) - i])
+        while (not self.is_full_node) and (self.__sizeof__() >= self.cache):
+            self.blocks.pop(0)
+        return (True, None)
+
+    def find_different(self, new_blocks: List[Block]) -> Tuple[int, int]:
+        """find how different two blockchain
+        
+        Args
+        ----
+        blocks: List[Block]
+            list of other blocks for find different with self blocks
+
+        Returns
+        -------
+        Tuple[int, int]
+            first int is first index self blocks from last that begin different
+            
+            second int is first index new blocks from last that begin different
+        """
+        # TODO: work with block height
+        for index1, block in enumerate(reversed(self.blocks)):
+            for index2, new_block in enumerate(reversed(new_blocks)):
+                if block.__hash__ == new_block.__hash__:
+                    return index1, index2
+        return len(self.blocks), len(new_blocks)
 
     def get_last_blocks(self, number=1) -> Optional[List[Block]]:
         """get last n blocks"""
@@ -104,29 +129,6 @@ class BlockChain:
         if number > len(self.blocks):
             return None  # bad request
         return self.blocks[-number:]
-
-    def is_valid_block(self, _block: Block, unspent_coins: Dict[str, Coin]) -> BlockValidationLevel:
-        """checking validation and return validation level"""
-        valid = BlockValidationLevel.Bad
-
-        # difficulty level
-        if int(_block.__hash__, 16) <= GlobalCfg.difficulty:
-            valid = valid | BlockValidationLevel.DIFFICULTY
-
-        # check all trx
-        if _block.check_trx(unspent_coins):
-            valid = valid | BlockValidationLevel.TRX
-
-        # check previous hash
-        last_block = self.last_block
-        if last_block:
-            if _block.previous_hash == last_block.__hash__:
-                valid = valid | BlockValidationLevel.PREVIOUS_HASH
-        else:
-            if _block.previous_hash == '':
-                valid = valid | BlockValidationLevel.PREVIOUS_HASH
-
-        return valid
 
     def search(self, key_hash) -> Optional[int]:
         """search from last block to first for find block with key_hash"""
@@ -153,6 +155,20 @@ class BlockChain:
         return [block.__hash__ for block in self.blocks[first_index: last_index]]
 
     @staticmethod
+    def check_blockchain(
+        blocks: List[Block],
+        unspent_coins: Dict[str, Coin]
+    ) -> Tuple[bool, Optional[int]]:
+        for index, block in enumerate(blocks):
+            pre_hash = ""
+            if index != 0:
+                pre_hash = blocks[index - 1].__hash__
+            validation = block.is_valid_block(unspent_coins, pre_hash=pre_hash)
+            if validation != BlockValidationLevel.ALL():
+                return False, index
+        return True, None
+
+    @staticmethod
     def json_to_blockchain(blockchain_data: List[Dict[str, Any]]) -> BlockChain:
         blockchain = [Block.from_json_data_full(
             block) for block in blockchain_data]
@@ -163,6 +179,13 @@ class BlockChain:
         if len(self.blocks) == 0:
             return None
         return self.blocks[-1]
+
+    @property
+    def last_block_hash(self) -> str:
+        pre_hash = ""
+        if self.last_block is not None:
+            pre_hash = self.last_block.__hash__
+        return pre_hash
 
     @property
     def height(self) -> int:

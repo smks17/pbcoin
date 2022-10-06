@@ -2,12 +2,35 @@ from __future__ import annotations
 from copy import deepcopy
 
 from datetime import datetime
+from functools import reduce
+from enum import Flag, auto
+from operator import or_ as _or_
 from hashlib import sha512
 from sys import getsizeof
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
-from .trx import Coin, Trx
+from .config import GlobalCfg
 from .merkle_tree import MerkleTreeNode
+from .trx import Coin, Trx
+
+
+class BlockValidationLevel(Flag):
+    Bad = 0
+    DIFFICULTY = auto()
+    TRX = auto()
+    PREVIOUS_HASH = auto()
+
+    @classmethod
+    def ALL(cls):
+        """get variable with all flag for checking validation"""
+        cls_name = cls.__name__
+        if not len(cls):
+            raise AttributeError(
+                f'empty {cls_name} does not have an ALL value')
+        value = cls(reduce(_or_, cls))
+        cls._member_map_['ALL'] = value
+        return value
+
 
 class Block:
     """
@@ -115,6 +138,22 @@ class Block:
                 trx_hash = coin.trx_hash
                 unspent_coins[trx_hash] = deepcopy(out_coins)
 
+    def revert_outputs(self, unspent_coins: dict[str, Coin]):
+        for trx in self.transactions:
+            in_coins = trx.inputs
+            out_coins = trx.outputs
+            # add input coins to unspent coins
+            for coin in in_coins:
+                trx_hash = coin.trx_hash
+                unspent_coins[trx_hash] = deepcopy(out_coins)
+
+            for coin in out_coins:
+                my_unspent = unspent_coins[coin.trx_hash]
+                my_unspent[coin.index] = None
+                if not any(my_unspent):
+                    # delete output coin from unspent_coins coins
+                    unspent_coins.pop(coin.trx_hash)
+
     def set_nonce(self, nonce_: int): self.nonce = nonce_
 
     def calculate_hash(self) -> str:
@@ -125,6 +164,31 @@ class Block:
         calculated_hash = sha512((data).encode()).hexdigest()
         self.block_hash = calculated_hash
         return calculated_hash
+
+    def is_valid_block(self, unspent_coins: Dict[str, Coin], pre_hash = "") -> BlockValidationLevel:
+        """checking validation and return validation level"""
+        valid = BlockValidationLevel.Bad
+
+        # difficulty level
+        if int(self.__hash__, 16) <= GlobalCfg.difficulty:
+            valid = valid | BlockValidationLevel.DIFFICULTY
+
+        # check all trx
+        if self.check_trx(unspent_coins):
+            valid = valid | BlockValidationLevel.TRX
+
+        # check previous hash
+        if self.previous_hash == pre_hash:
+                valid = valid | BlockValidationLevel.PREVIOUS_HASH
+
+        return valid
+
+    def search(self, key_hash) -> Optional[int]:
+        """search from last block to first for find block with key_hash"""
+        for i in range(len(self.blocks)-1, -1, -1):
+            if self.blocks[i].__hash__ == key_hash:
+                return i
+        return None
 
     def get_data(self, is_full_lock=True, is_POSIX_timestamp=True) -> dict[str, Any]:
         """
@@ -226,8 +290,11 @@ class Block:
     def __hash__(self):
         return self.block_hash if (hasattr(self, 'block_hash') and self.block_hash is not None) else self.calculate_hash()
 
+    def __eq__(self, __o: object) -> bool:
+        return __o.__hash__ == self.__hash__
+
     def __str__(self) -> str:
         return self.transactions.__str__() + str(self.proof) + self.previous_hash
 
     def __repr__(self) -> str:
-        return self.get_data()
+        return self.block_hash[-8:]
