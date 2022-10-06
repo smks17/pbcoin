@@ -64,7 +64,7 @@ class Mine:
         if setup_block is not None:
             self.setup_block = setup_block
         elif type(self.blockchain) is BlockChain:
-            subsidy = Trx(core.BLOCK_CHAIN.height, core.WALLET.public_key)
+            subsidy = Trx(self.blockchain.height, core.WALLET.public_key)
             self.setup_block = self.blockchain.setup_new_block(
                 mempool=self.mempool, subsidy=subsidy)
         else:
@@ -78,11 +78,11 @@ class Mine:
                 self.setup_block.set_nonce(0)
             if self.stop_mining:
                 continue
+            self.setup_block.set_mined()
             # calculate hash and check difficulty
             if int(self.setup_block.calculate_hash(), 16) <= GlobalCfg.difficulty:
                 if self.start_over:
                     break
-                self.setup_block.set_mined()
                 self.mined_new = True
                 break
             self.setup_block.set_nonce(self.setup_block.nonce+1)

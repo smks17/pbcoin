@@ -40,6 +40,7 @@ class Block:
         self.previous_hash = preHash
         self.block_height = block_height
         self.nonce = 0
+        self.time = datetime.utcnow().timestamp()
         # make subsidy trx (a trx that give itself reward for mine block)
         if subsidy is not None:
             self.transactions = [subsidy]
@@ -120,9 +121,8 @@ class Block:
         if self.merkle_tree is None:
             self.build_merkle_tree()
         nonce_hash = sha512(str(self.nonce).encode()).hexdigest()
-        calculated_hash = sha512(
-            (self.merkle_tree.hash + nonce_hash + self.previous_hash).encode()
-        ).hexdigest()
+        data = self.merkle_tree.hash + nonce_hash + self.previous_hash + str(self.time)
+        calculated_hash = sha512((data).encode()).hexdigest()
         self.block_hash = calculated_hash
         return calculated_hash
 
