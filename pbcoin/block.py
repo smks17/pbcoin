@@ -1,6 +1,6 @@
 from __future__ import annotations
-from copy import deepcopy
 
+from copy import deepcopy
 from datetime import datetime
 from functools import reduce
 from enum import Flag, auto
@@ -159,8 +159,7 @@ class Block:
     def calculate_hash(self) -> str:
         if self.merkle_tree is None:
             self.build_merkle_tree()
-        nonce_hash = sha512(str(self.nonce).encode()).hexdigest()
-        data = self.merkle_tree.hash + nonce_hash + self.previous_hash + str(self.time)
+        data = self.merkle_tree.hash + str(self.nonce) + self.previous_hash + str(self.time)
         calculated_hash = sha512((data).encode()).hexdigest()
         self.block_hash = calculated_hash
         return calculated_hash
