@@ -21,13 +21,21 @@ class BlockValidationLevel(Flag):
     PREVIOUS_HASH = auto()
 
     @classmethod
-    def ALL(cls):
-        """get variable with all flag for checking validation"""
+    def ALL(cls, except_validations: Optional[BlockValidationLevel] = None):
+        """get variable with all flag for checking validation
+        also remove except_validations from all
+
+        except_validations: Optional[BlockValidationLevel] = None
+            this is validation levels that you want ignore
+        """
+        if except_validations is None:
+            except_validations = cls.Bad
         cls_name = cls.__name__
         if not len(cls):
             raise AttributeError(
                 f'empty {cls_name} does not have an ALL value')
-        value = cls(reduce(_or_, cls))
+        values = filter(lambda x: (x & except_validations) == cls.Bad, cls)
+        value = cls(reduce(_or_, values))
         cls._member_map_['ALL'] = value
         return value
 
