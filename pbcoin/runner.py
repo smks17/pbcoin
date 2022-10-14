@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 import sys
 from math import inf
 from threading import Thread
 from typing import NewType, Union
 
+from pbcoin.block import Block
 from .config import GlobalCfg, NetworkCfg, LoggerCfg
 from .cli_handler import CliServer
 from .net import Node
@@ -23,11 +25,10 @@ def create_core():
     """Create the core objects"""
     core.WALLET = Wallet()
     core.BLOCK_CHAIN = BlockChain([])
-    core.MINER = Mine(core.BLOCK_CHAIN, core.NETWORK)
+    core.MINER = Mine(core.BLOCK_CHAIN, core.WALLET ,core.NETWORK)
 
 
 inf_type = NewType("inf_type", float)
-
 
 async def mine_starter(how_many: Union[inf_type, int]=inf):
     """Set up and start mining
@@ -42,10 +43,14 @@ async def mine_starter(how_many: Union[inf_type, int]=inf):
         core.BLOCK_CHAIN.cache = GlobalCfg.cache * 1000  # to bytes
         if how_many == inf:
             while True:
-                await core.MINER.start()
+                await core.MINER.mine()
+                Block.update_outputs(deepcopy(core.MINER.setup_block), core.ALL_OUTPUTS)
+                core.WALLET.updateBalance(deepcopy(core.MINER.setup_block.transactions))
         else:
             for _ in range(how_many):
-                await core.MINER.start()
+                await core.MINER.mine()
+                core.MINER.setup_block.update_outputs(core.ALL_OUTPUTS)
+                core.WALLET.updateBalance(deepcopy(core.MINER.setup_block.transactions))
 
 async def setup_network(has_cli, has_socket_network):
     """Set up network for connect other nodes and cli"""

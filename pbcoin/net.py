@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from copy import copy
+from copy import copy, deepcopy
 from sys import getsizeof
 from random import shuffle
 from enum import IntEnum, auto
@@ -318,8 +318,9 @@ class Node:
             number_new_blocks = block.block_height - core.BLOCK_CHAIN.height
             if number_new_blocks == 1:
                 # just this block is new
-                done = core.BLOCK_CHAIN.add_new_block(
-                    block, core.ALL_OUTPUTS, wallet=core.WALLET)
+                done = core.BLOCK_CHAIN.add_new_block(block, core.ALL_OUTPUTS)
+                Block.update_outputs(deepcopy(block), core.ALL_OUTPUTS)
+                core.Wallet.updateBalance(deepcopy(block.transactions))
                 if done != BlockValidationLevel.ALL():
                     # TODO: send why receive data is a bad request
                     logging.error(f"Bad request mined block from {data['src_ip']} validation: {done}")

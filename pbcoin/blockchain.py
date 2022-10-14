@@ -13,7 +13,6 @@ from typing import (
 from .block import Block, BlockValidationLevel
 from .config import GlobalCfg
 from .trx import Coin, Trx
-from .wallet import Wallet
 
 
 class BlockChain:
@@ -48,16 +47,15 @@ class BlockChain:
             block.add_trx(trx)
         return block
 
-    def add_new_block(self, block_: Block, unspent_coins: Dict[str, Coin],
-                    update_balance = True, wallet: Optional[Wallet] = None,
-                    ignore_validation=False
-                    ) -> Optional[BlockValidationLevel]:
-        validation = block_.is_valid_block(unspent_coins, pre_hash=self.last_block_hash)
-        if ignore_validation or validation == BlockValidationLevel.ALL():
+    def add_new_block(
+        self, block_: Block, unspent_coins: Optional[Dict[str, Coin]]=None , ignore_validation=False
+    ) -> Optional[BlockValidationLevel]:
+        if not ignore_validation:
+            validation = block_.is_valid_block(unspent_coins, pre_hash=self.last_block_hash)
+        else:
+            validation = BlockValidationLevel.ALL()
+        if validation == BlockValidationLevel.ALL():
             self.blocks.append(deepcopy(block_))
-            Block.update_outputs(deepcopy(block_), unspent_coins)
-            if update_balance:
-                wallet.updateBalance(deepcopy(block_.transactions))
         if (not self.is_full_node) and (self.__sizeof__() >= self.cache):
             self.blocks.pop(0)
         return validation

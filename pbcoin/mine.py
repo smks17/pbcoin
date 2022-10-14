@@ -5,11 +5,14 @@ from ellipticcurve.ecdsa import Ecdsa
 from ellipticcurve.publicKey import PublicKey
 from ellipticcurve.signature import Signature
 
+
+from .block import Block
 from .blockchain import BlockChain
 from .config import GlobalCfg
 from .logger import getLogger
 from .net import Node
 from .trx import Trx
+from .wallet import Wallet
 import pbcoin.core as core
 
 
@@ -29,18 +32,25 @@ class Mine:
             if true it changes the nonce value to 0 and then starts to continue mining
         blockchain: BlockChain
             a Blockchain object (often from core.py)
+        wallet: Wallet
+            a Wallet object for save your balance and stuff
         node: Node
             a Node object from net.py
         mempool: list[Trx]
             the list of transactions that should has been mined
     """
-    def __init__(self, blockchain_: Union[BlockChain, List],
-                node_: Node = None, mempool_: List[Trx] = []):
+    def __init__(
+        self,
+        blockchain: Union[BlockChain, List],
+        wallet = Optional[Wallet],
+        node: Optional[Node] = None,
+        mempool: List[Trx] = []
+    ):
         self.reset()
-        self.blockchain = blockchain_
-        self.node = node_
-        self.mempool = mempool_
-
+        self.blockchain = blockchain
+        self.node = node
+        self.mempool = mempool
+        self.wallet = wallet
 
     def reset(self):
         """reset mine parameter for start again mining for next block"""
@@ -50,16 +60,18 @@ class Mine:
         self.reset_nonce = False
         self.mempool = []
 
-    async def start(self, setup_block: Optional[BlockChain] = None) -> None:
+    async def mine(self, setup_block: Optional[Block] = None, add_block = True) -> None:
         """Start mining for new block and send to other nodes
         from network if it is setup
         
         Args
         ----
-        setup_block: Optional[BlockChain] = None
+        setup_block: Optional[Block] = None
             the specific block to find its nonce and
             send to other nodes. If it is None then get
             from blockchain object
+        add_block: bool = True
+            if True then add the mined block to the blockchain
         """
         if setup_block is not None:
             self.setup_block = setup_block
@@ -91,15 +103,13 @@ class Mine:
             logging.debug(f"minded block info: {self.setup_block.get_data(True, False)}")
             if GlobalCfg.network and self.node is not None:
                 await self.node.send_mined_block(self.setup_block)
-            if type(self.blockchain) is BlockChain:
-                self.blockchain.add_new_block(
-                    self.setup_block, core.ALL_OUTPUTS, wallet=core.WALLET)
+            if add_block and type(self.blockchain) is BlockChain:
+                self.blockchain.add_new_block(self.setup_block, ignore_validation=True)
                 logging.debug(f"New blockchain: {self.blockchain.get_hashes()}")
-            else:
+            elif add_block:
                 self.blockchain.append(self.setup_block)
                 logging.debug("New blockchain: ",
-                            [block.get_hashes() for block in self.blockchain])
-
+                            [block.__hash__ for block in self.blockchain])
 
     def add_trx_to_mempool(self, trx_: Trx, sig: Signature, pub_key_: PublicKey):
         # first check sign of senders
