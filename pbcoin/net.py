@@ -64,7 +64,8 @@ class Node:
             list of neighbors for declaring mine block or mempool
     """
 
-    def __init__(self, ip: str, port: int):
+    def __init__(self, blockchain: BlockChain, wallet: Wallet, miner: Mine,
+                unspent_coins: Dict[str, Coin], ip: str, port: int):
         self.ip = ip
         self.port = port
         if not self.ip:
@@ -74,6 +75,10 @@ class Node:
         self.uid = self.calculate_uid(ip, str(port))  # TODO: use public key
         self.neighbors: Dict[str, Tuple[str, int]] = dict()
         self.is_listening = False
+        self.blockchain = blockchain
+        self.wallet = wallet
+        self.miner = miner
+        self.unspent_coins = unspent_coins
 
     async def connect_to(
         self,
@@ -309,22 +314,22 @@ class Node:
 
     async def handle_mined_block(self, data: Dict[str, Any]):
         """handle for request finder new block"""
-        core.MINER.stop_mining = True
         block_data = data['block']
         logging.debug(f"mine block from {data['src_ip']}: {block_data}")
         block = Block.from_json_data_full(block_data)
         # checking which blockchain is longer, own or its?
-        if block.block_height > core.BLOCK_CHAIN.height:
-            number_new_blocks = block.block_height - core.BLOCK_CHAIN.height
+        if block.block_height > self.blockchain.height:
+            number_new_blocks = block.block_height - self.blockchain.height
             if number_new_blocks == 1:
                 # just this block is new
-                done = core.BLOCK_CHAIN.add_new_block(block, core.ALL_OUTPUTS)
-                Block.update_outputs(deepcopy(block), core.ALL_OUTPUTS)
-                core.Wallet.updateBalance(deepcopy(block.transactions))
+                done = self.blockchain.add_new_block(block, self.unspent_coins)
                 if done != BlockValidationLevel.ALL():
                     # TODO: send why receive data is a bad request
                     logging.error(f"Bad request mined block from {data['src_ip']} validation: {done}")
                 else:
+                    last = self.blockchain.last_block
+                    last.update_outputs(self.unspent_coins)
+                    self.wallet.updateBalance(deepcopy(last.transactions))
                     logging.info(f"New mined block from {data['src_ip']}")
                     logging.debug(
                         f"info mined block from {data['src_ip']}: {block.get_data()}")
@@ -343,11 +348,8 @@ class Node:
                     blocks = res['blocks']
                     blocks = [Block.from_json_data_full(
                         block) for block in blocks]
-                    result = core.BLOCK_CHAIN.resolve(blocks, core.ALL_OUTPUTS)
-                    if result[0] == True:
-                        core.MINER.start_over = True
-                    else:
-                        pass # TODO: send back to node
+                    result = self.blockchain.resolve(blocks, self.unspent_coins)
+                    # TODO: send problem to node if result is False
                 else:
                     # TODO
                     logging.error("Bad request send for get blocks")
@@ -356,12 +358,11 @@ class Node:
             logging.error("Not implemented resolve shorter blockchain")
             pass
 
-        logging.debug(f"new block chian: {core.BLOCK_CHAIN.get_hashes()}")
-        core.MINER.start_over = True
+        logging.debug(f"new block chian: {self.blockchain.get_hashes()}")
 
     async def handle_get_blocks(self, data: Dict[str, Any], writer: AsyncWriter):
         """handle for request another node for getting block"""
-        copy_blockchain = copy(core.BLOCK_CHAIN)
+        copy_blockchain = copy(self.blockchain)
         first_index: Optional[int] = None
         hash_block = data.pop('hash_block', None)
         if hash_block:
@@ -401,9 +402,9 @@ class Node:
                 out_coin["owner"], out_coin["index"], out_coin["trx_hash"], out_coin["value"]))
         time = trx_data['time']
         new_trx = Trx(
-            core.BLOCK_CHAIN.height, core.WALLET.public_key, inputs, outputs, time)
+            self.blockchain.height, self.wallet.public_key, inputs, outputs, time)
         # add to mempool and send other nodes
-        if core.MINER.add_trx_to_mempool(new_trx, sig, pubKey):
+        if self.miner.add_trx_to_mempool(new_trx, sig, pubKey):
             for uid in self.neighbors:
                 ip, port = self.neighbors[uid]
                 if not ip in data['passed_nodes']:
@@ -482,8 +483,8 @@ class Node:
                 if rec['status']:
                     blockchain = BlockChain.json_to_blockchain(
                         rec['blocks'])
-                    if core.BLOCK_CHAIN.height < blockchain.height:
-                        core.BLOCK_CHAIN = blockchain
+                    if self.blockchain.height < blockchain.height:
+                        self.blockchain = blockchain
                 else:
                     raise NotImplementedError()
                 logging.debug(f"blockchain: {rec}")
@@ -509,8 +510,8 @@ class Node:
             "src_ip": f'{self.ip}:{self.port}',
             'dst_ip': '',
             "trx": trx_.get_data(with_hash=True),
-            "signature": core.WALLET.base64Sign(trx_),
-            "public_key": core.WALLET.public_key,
+            "signature": self.wallet.base64Sign(trx_),
+            "public_key": self.wallet.public_key,
             "passed_nodes": [self.ip]
         }
         for uid in self.neighbors:

@@ -26,7 +26,7 @@ def create_core():
     core.WALLET = Wallet()
     core.BLOCK_CHAIN = BlockChain([])
     core.MINER = Mine(core.BLOCK_CHAIN, core.WALLET ,core.NETWORK)
-
+    core.MINER = Mine(core.BLOCK_CHAIN, core.WALLET , core.MINER, core.NETWORK)
 
 inf_type = NewType("inf_type", float)
 
@@ -56,7 +56,7 @@ async def setup_network(has_cli, has_socket_network):
     """Set up network for connect other nodes and cli"""
     handlers = []
     if has_socket_network:
-        core.NETWORK = Node(NetworkCfg.ip, NetworkCfg.port)
+        core.NETWORK = Node(core.BLOCK_CHAIN, core.WALLET, core.MINER, core.ALL_OUTPUTS, NetworkCfg.ip, NetworkCfg.port)
         await core.NETWORK.start_up(NetworkCfg.seeds)
         core.MINER.node = core.NETWORK
         handlers.append(core.NETWORK.listen())
