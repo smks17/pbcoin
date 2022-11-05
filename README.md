@@ -1,40 +1,64 @@
 # pbcoin
-it is a simple blockchain with POW Consensus
+It is a simple blockchain with POW Consensus
 
-## run
-Note: this project just was tested in python >= 3.8 and project is in development.
+# run
+Note: this project just was tested in python >= 3.8 and also is in development.
 
-first install requirenments
+## in Windows
+
+First make venv folder for python apps in powershell and then install the apps:
 ```console
-    $ pip install -r requirements.txt
+    python -m venv env
+    ./env/Scripts/Activate.ps1
+    pip install --editable .
 ```
-
-example of running 2 nodes
+Now you can run program node or pbcoin-cli. For example for running two nodes:
 
 #### nod 1:
 ```console
-    $ python3 pbcoin.py --host 127.0.0.1 --port 8989
+    ./env/Scripts/node.exe --host 127.0.0.1 --port 8989 --socket-path \\.\pipe\node1_socket --logging-filename .\node1.log
 ```
 #### nod 2:
 ```console
-    $ python3 pbcoin.py --host 127.0.0.2 --port 8989 --seeds 127.0.0.1:8989
+    ./env/Scripts/node.exe --host 127.0.0.2 --port 8989 --seeds 127.0.0.1:8989 --socket-path \\.\pipe\node2_socket --logging-filename .\node2.log
 ```
-you can run n nodes...
 
-also you can use --help for print usage message
-
-## cli
-
-after running the node get you Cli for interactions to make a transaction, get balance, and get block data. for example for sending 25 coins to an arbitrary address '4d7387d434b2ba8e089eee2af708dde' (it's fake), you can do like this:
+## in Linux (or Unix)
+First make venv folder for python apps in powershell and then install the apps:
 ```console
-    > trx 4d7387d434b2ba8e089eee2af708dde 25
+    python3 -m venv env
+    source env/bin/activate
+    pip3 install --editable . 
 ```
-for more help type help in cli
+Now you can run program node or pbcoin-cli. For example for running two nodes:
 
-## Block
+#### nod 1:
+```console
+    ./env/bin/node --host 127.0.0.1 --port 8989 --socket-path .\node1_socket.s --logging-filename .\node1.log
+```
+#### nod 2:
+```console
+    ./env/bin/node --host 127.0.0.2 --port 8989 --seeds 127.0.0.1:8989 --socket-path .\node2_socket.s --logging-filename .\node2.log
+```
+you can run another n nodes... also you can use --help for print usage message.
+
+# cli
+
+after running the node you can run pbcoin-cli in env folder for interactions to make a transaction, get balance, and get block data. for example for sending 25 coins to an arbitrary address '4d7387d434b2ba8e089eee2af708dde' (it's fake), you can do like this:
+## Windows
+```console
+    ./env/Scripts/pbcoin_cli.exe --socket-path \\.\pipe\node1_socket trx 4d7387d434b2ba8e089eee2af708dde 25
+```
+## Linux
+```console
+    ./env/bin/pbcoin_cli --socket-path .\node1_socket.s trx 4d7387d434b2ba8e089eee2af708dde 25
+```
+you can use --help for print usage cli
+
+# Block
 each block contains:
 
-header:
+## header
 - hash: block hash
 - height: block height (number of blocks before this block)
 - nonce: a random number that makes block hash less than difficulty
@@ -44,11 +68,11 @@ header:
 - previous_hash
 - time: the time that is mined
 
-other:
+## other
 - trx: list of all block transactions
 - size: size of data (block)
 
-## Transaction
+# Transaction
 each transaction contains:
 - inputs: the input coins
 - output: the output coins
@@ -57,13 +81,14 @@ each transaction contains:
 - include_block: this trx is in which block in blockchain
 - hash: if with_hash is True, then put trx hash too
 
+## Coin
 and coin contains:
 - value: the amount of this coin
 - owner: who is (or was) this coin for
 - trx_hash: exists in which transaction
 - index: index of transaction in the block that contains this transaction
 
-## TODO
+# TODO
 
 - [ ] full node and not SVP
 - [ ] implement key and sign
@@ -71,3 +96,4 @@ and coin contains:
 - [ ] dockerize
 - [ ] separate wallet and node
 - [ ] database
+- [ ] modular
