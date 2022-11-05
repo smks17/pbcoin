@@ -7,7 +7,8 @@ from math import inf
 from threading import Thread
 from typing import NewType, Union
 
-from pbcoin.block import Block
+from .block import Block
+from .mempool import Mempool
 from .config import GlobalCfg, NetworkCfg, LoggerCfg
 from .cli_handler import CliServer
 from .net import Node
@@ -25,8 +26,8 @@ def create_core():
     """Create the core objects"""
     core.WALLET = Wallet()
     core.BLOCK_CHAIN = BlockChain([])
-    core.MINER = Mine(core.BLOCK_CHAIN, core.WALLET ,core.NETWORK)
-    core.MINER = Mine(core.BLOCK_CHAIN, core.WALLET , core.MINER, core.NETWORK)
+    core.MEMPOOL = Mempool()
+    core.MINER = Mine(core.BLOCK_CHAIN, core.WALLET , core.MEMPOOL, core.NETWORK)
 
 inf_type = NewType("inf_type", float)
 
@@ -56,7 +57,7 @@ async def setup_network(has_cli, has_socket_network):
     """Set up network for connect other nodes and cli"""
     handlers = []
     if has_socket_network:
-        core.NETWORK = Node(core.BLOCK_CHAIN, core.WALLET, core.MINER, core.ALL_OUTPUTS, NetworkCfg.ip, NetworkCfg.port)
+        core.NETWORK = Node(core.BLOCK_CHAIN, core.WALLET, core.MEMPOOL, core.ALL_OUTPUTS, NetworkCfg.ip, NetworkCfg.port)
         await core.NETWORK.start_up(NetworkCfg.seeds)
         core.MINER.node = core.NETWORK
         handlers.append(core.NETWORK.listen())

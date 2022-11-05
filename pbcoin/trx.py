@@ -134,6 +134,8 @@ class Trx:
             self.value = sum(coin.value for coin in outputs_)
             self.hash_trx = self.calculate_hash()
             self.inputs = inputs_  # TODO: check input not to be empty
+            for out_coin in outputs_:
+                out_coin.trx_hash = self.hash_trx
             self.outputs = outputs_
             self.is_generic = False
         self.public_key = sender_key # TODO: should be lists
@@ -240,4 +242,4 @@ class Trx:
         return f'{str(self.inputs)}{str(self.outputs)}{self.time}'
 
     def __repr__(self) -> str:
-        return json.dumps(self.get_data(with_hash=True, is_POSIX_timestamp=True))
+        return f'({str(self.inputs)}->{str(self.outputs)} on {datetime.fromtimestamp(self.time)})'

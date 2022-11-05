@@ -20,13 +20,14 @@ from typing import (
 from ellipticcurve.publicKey import PublicKey
 from ellipticcurve.signature import Signature
 
-import pbcoin.core as core
 from .block import Block
 from .blockchain import BlockChain, BlockValidationLevel
 from .config import NetworkCfg
 from .constants import TOTAL_NUMBER_CONNECTIONS, NETWORK_DATA_SIZE
 from .logger import getLogger
+from .mempool import Mempool
 from .trx import Coin, Trx
+from .wallet import Wallet
 
 
 logging = getLogger(__name__)
@@ -64,7 +65,7 @@ class Node:
             list of neighbors for declaring mine block or mempool
     """
 
-    def __init__(self, blockchain: BlockChain, wallet: Wallet, miner: Mine,
+    def __init__(self, blockchain: BlockChain, wallet: Wallet, mempool: Mempool,
                 unspent_coins: Dict[str, Coin], ip: str, port: int):
         self.ip = ip
         self.port = port
@@ -77,7 +78,7 @@ class Node:
         self.is_listening = False
         self.blockchain = blockchain
         self.wallet = wallet
-        self.miner = miner
+        self.mempool = mempool
         self.unspent_coins = unspent_coins
 
     async def connect_to(
@@ -404,7 +405,8 @@ class Node:
         new_trx = Trx(
             self.blockchain.height, self.wallet.public_key, inputs, outputs, time)
         # add to mempool and send other nodes
-        if self.miner.add_trx_to_mempool(new_trx, sig, pubKey):
+        if self.mempool.add_new_transaction(new_trx, self.blockchain.last_block,
+                                            sig, pubKey, self.unspent_coins):
             for uid in self.neighbors:
                 ip, port = self.neighbors[uid]
                 if not ip in data['passed_nodes']:

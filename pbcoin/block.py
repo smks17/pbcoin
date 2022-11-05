@@ -90,7 +90,7 @@ class Block:
             coin.trx_hash = trx_.__hash__
 
     def get_list_hashes_trx(self) -> list[str]:
-        return [trx.hash_trx for trx in self.transactions]
+        return [trx.__hash__ for trx in self.transactions]
 
     def build_merkle_tree(self) -> None:
         """ set and build merkle tree from trxs of block"""

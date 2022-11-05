@@ -66,7 +66,7 @@ class Wallet:
             made_trx = Trx.make_trx(sum(list(self.out_coins.values()), []),
                                         self.public_key, recipient, value)
             # add to own mempool
-            if not core.MINER.add_trx_to_mempool(made_trx, self.sign(made_trx), self.walletKey.publicKey()):
+            if not core.MEMPOOL.add_new_transaction(made_trx, self.sign(made_trx), core.BLOCK_CHAIN.last_block, self.walletKey.publicKey()):
                 return False
             # send to nodes and add to network mempool
             if GlobalCfg.network:

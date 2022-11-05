@@ -12,6 +12,7 @@ from typing import (
 
 from .block import Block, BlockValidationLevel
 from .config import GlobalCfg
+from .mempool import Mempool
 from .trx import Coin, Trx
 
 
@@ -35,7 +36,7 @@ class BlockChain:
         if not self.is_full_node:
             self.cache = GlobalCfg.cache
 
-    def setup_new_block(self, subsidy: Trx, mempool: List[Trx] = []):
+    def setup_new_block(self, subsidy: Trx, mempool: Mempool):
         """set up a new block in chain for mine"""
         # TODO: checking from other nodes if this node is not a full node
         previous_hash = self.last_block_hash
@@ -187,9 +188,10 @@ class BlockChain:
 
     @property
     def height(self) -> int:
-        if len(self.blocks) == 0:
+        last = self.last_block
+        if last is None:
             return 0
-        return self.last_block.block_height
+        return last.block_height
 
     def __sizeof__(self) -> int:
         size = 0

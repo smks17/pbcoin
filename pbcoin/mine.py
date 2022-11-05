@@ -1,15 +1,10 @@
-from copy import copy
 from typing import List, Optional, Union
-
-from ellipticcurve.ecdsa import Ecdsa
-from ellipticcurve.publicKey import PublicKey
-from ellipticcurve.signature import Signature
-
 
 from .block import Block
 from .blockchain import BlockChain
 from .config import GlobalCfg
 from .logger import getLogger
+from .mempool import Mempool
 from .net import Node
 from .trx import Trx
 from .wallet import Wallet
@@ -36,21 +31,21 @@ class Mine:
             a Wallet object for save your balance and stuff
         node: Node
             a Node object from net.py
-        mempool: list[Trx]
-            the list of transactions that should has been mined
+        mempool: Mempool
+            the Mempool object that is a list of transactions that should has been mined
     """
     def __init__(
         self,
         blockchain: Union[BlockChain, List],
-        wallet = Optional[Wallet],
+        wallet: Optional[Wallet],
+        mempool: Mempool,
         node: Optional[Node] = None,
-        mempool: List[Trx] = []
     ):
-        self.reset()
         self.blockchain = blockchain
         self.node = node
         self.mempool = mempool
         self.wallet = wallet
+        self.reset()
 
     def reset(self):
         """reset mine parameter for start again mining for next block"""
@@ -58,7 +53,6 @@ class Mine:
         self.mined_new = False
         self.stop_mining = False
         self.reset_nonce = False
-        self.mempool = []
 
     async def mine(self, setup_block: Optional[Block] = None, add_block = True) -> None:
         """Start mining for new block and send to other nodes
@@ -82,8 +76,12 @@ class Mine:
         else:
             raise Exception("Mine needs to setup block")
         self.reset()
+        if isinstance(self.blockchain, List):
+            last_n = len(self.blockchain)
+        else:
+            last_n = self.blockchain.height
         logging.debug("start again mine")
-        while(not self.start_over):
+        while not self.check_add_block(last_n):
             if self.start_over:
                 break
             if self.reset_nonce:
@@ -110,17 +108,12 @@ class Mine:
                 self.blockchain.append(self.setup_block)
                 logging.debug("New blockchain: ",
                             [block.__hash__ for block in self.blockchain])
+            self.mempool.remove_transactions()
 
-    def add_trx_to_mempool(self, trx_: Trx, sig: Signature, pub_key_: PublicKey):
-        # first check sign of senders
-        if Ecdsa.verify(trx_.__hash__, sig, pub_key_):
-            if not self.setup_block.check_trx(core.ALL_OUTPUTS):
-                return False
-            self.mempool.append(copy(trx_))
-            self.setup_block.add_trx(copy(trx_))
-            # self.reset_nonce = True
-            logging.debug(
-                f"A trx was added to mempool:{trx_.get_data(is_POSIX_timestamp=False)}")
-            return True
+    def check_add_block(self, last_n: int):
+        """check now blockchain height with last_n"""
+        if isinstance(self.blockchain, List):
+            height = len(self.blockchain)
         else:
-            return False
+            height = self.blockchain.height
+        return height > last_n
