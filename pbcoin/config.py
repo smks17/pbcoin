@@ -30,12 +30,12 @@ __all__ = [
 
 class GlobalCfg:
     config = False
-    debug: bool  # Logging more in debug mode
-    mining: bool  # Set mining on or off
-    cache: int
-    full_node: bool  # Set full node or not
-    difficulty: int
-    network: bool  # networks(socket+cli) api is run or not
+    debug: bool = False  # Logging more in debug mode
+    mining: bool = True  # Set mining on or off
+    cache: int = 15
+    full_node: bool = False  # Set full node or not
+    difficulty: int = DIFFICULTY
+    network: bool = True  # networks(socket+cli) api is run or not
 
     @classmethod
     def update(cls, option: Dict[str, Union[bool, int]]):
@@ -53,12 +53,12 @@ class GlobalCfg:
 
 # Configs that are related to connection other nodes and cli
 class NetworkCfg():
-    ip: str
-    port: int
-    seeds: List[str]
-    socket_path: str
-    cli: bool  # cli api is run or not
-    socket_network: bool  # socket network api is run or not (for connect other nodes)
+    ip: str = DEFAULT_HOST
+    port: int = DEFAULT_PORT
+    seeds: List[str] = DEFAULT_SEEDS
+    socket_path: str = DEFAULT_SOCKET_PATH
+    cli: bool = True  # cli api is run or not
+    socket_network: bool = True  # socket network api is run or not (for connect other nodes)
 
     @classmethod
     def update(cls, option: Dict[str, Any]):
@@ -75,11 +75,11 @@ class NetworkCfg():
         cls.socket_network = option.get("socket_network", True)
 
 class LoggerCfg:
-    do_logging: bool
-    log_format: str
-    log_level: int
-    log_filename: str
-    log_date_format: str
+    do_logging: bool = True
+    log_format: str = DEFAULT_LOGGING_FORMAT
+    log_level: int = DEFAULT_LOGGING_LEVEL
+    log_filename: str = DEFAULT_LOGGING_FILENAME
+    log_date_format: str = DEFAULT_LOGGING_DATE_FORMAT
 
     @classmethod
     def update(cls, option: dict[str, Any]):
