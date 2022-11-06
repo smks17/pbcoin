@@ -49,10 +49,15 @@ class BlockChain:
         return block
 
     def add_new_block(
-        self, block_: Block, unspent_coins: Optional[Dict[str, Coin]]=None , ignore_validation=False
+        self,
+        block_: Block,
+        unspent_coins: Optional[Dict[str, Coin]]=None,
+        ignore_validation=False,
+        difficulty: int = GlobalCfg.difficulty  # almost just for unittest
     ) -> Optional[BlockValidationLevel]:
         if not ignore_validation:
-            validation = block_.is_valid_block(unspent_coins, pre_hash=self.last_block_hash)
+            validation = block_.is_valid_block(
+                unspent_coins, pre_hash=self.last_block_hash, difficulty=difficulty)
         else:
             validation = BlockValidationLevel.ALL()
         if validation == BlockValidationLevel.ALL():
@@ -64,7 +69,8 @@ class BlockChain:
     def resolve(
         self,
         new_blocks: List[Block],
-        unspent_coins: Dict[str, Coin]
+        unspent_coins: Dict[str, Coin],
+        difficulty: int = GlobalCfg.difficulty  # almost for unittest
     ) -> Tuple[bool, Optional[int]]:
         """resolve the this blockchain with new blocks
 
@@ -74,6 +80,8 @@ class BlockChain:
             list of new blocks for resolve and add to this blockchain
         unspent_coins: Dict[str, Coin]
             a data from unspent coin for update after resolve
+        difficulty: int
+            for checking difficulty of new blocks
 
         Return
         ------
@@ -83,7 +91,8 @@ class BlockChain:
             it resolves with no problem, the second one is None
         """
         copy_unspent_coins = copy(unspent_coins)
-        result = BlockChain.check_blockchain(new_blocks, copy_unspent_coins)
+        result = BlockChain.check_blockchain(
+            new_blocks, copy_unspent_coins, difficulty)
         if not result[0]:
             return result
         self_blockchain_index, new_blockchain_index = self.find_different(new_blocks)
@@ -156,13 +165,14 @@ class BlockChain:
     @staticmethod
     def check_blockchain(
         blocks: List[Block],
-        unspent_coins: Dict[str, Coin]
+        unspent_coins: Dict[str, Coin],
+        difficulty = GlobalCfg.difficulty  # almost just for unittest
     ) -> Tuple[bool, Optional[int]]:
         for index, block in enumerate(blocks):
             pre_hash = ""
             if index != 0:
                 pre_hash = blocks[index - 1].__hash__
-            validation = block.is_valid_block(unspent_coins, pre_hash=pre_hash)
+            validation = block.is_valid_block(unspent_coins, pre_hash=pre_hash, difficulty=difficulty)
             if validation != BlockValidationLevel.ALL():
                 return False, index
         return True, None

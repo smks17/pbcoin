@@ -172,12 +172,17 @@ class Block:
         self.block_hash = calculated_hash
         return calculated_hash
 
-    def is_valid_block(self, unspent_coins: Dict[str, Coin], pre_hash = "") -> BlockValidationLevel:
+    def is_valid_block(
+        self,
+        unspent_coins: Dict[str, Coin],
+        pre_hash = "",
+        difficulty = GlobalCfg.difficulty  # almost for unittest
+    ) -> BlockValidationLevel:
         """checking validation and return validation level"""
         valid = BlockValidationLevel.Bad
 
         # difficulty level
-        if int(self.__hash__, 16) <= GlobalCfg.difficulty:
+        if int(self.__hash__, 16) <= difficulty:
             valid = valid | BlockValidationLevel.DIFFICULTY
 
         # check all trx

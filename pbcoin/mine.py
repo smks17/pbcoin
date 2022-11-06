@@ -54,7 +54,12 @@ class Mine:
         self.stop_mining = False
         self.reset_nonce = False
 
-    async def mine(self, setup_block: Optional[Block] = None, add_block = True) -> None:
+    async def mine(
+        self,
+        setup_block: Optional[Block] = None,
+        add_block = True,
+        difficulty: int = GlobalCfg.difficulty # almost just for unittest
+    ) -> None:
         """Start mining for new block and send to other nodes
         from network if it is setup
         
@@ -66,6 +71,8 @@ class Mine:
             from blockchain object
         add_block: bool = True
             if True then add the mined block to the blockchain
+        difficulty: int
+            mine for what difficulty
         """
         if setup_block is not None:
             self.setup_block = setup_block
@@ -90,7 +97,7 @@ class Mine:
                 continue
             self.setup_block.set_mined()
             # calculate hash and check difficulty
-            if int(self.setup_block.calculate_hash(), 16) <= GlobalCfg.difficulty:
+            if int(self.setup_block.calculate_hash(), 16) <= difficulty:
                 if self.start_over:
                     break
                 self.mined_new = True
@@ -102,7 +109,8 @@ class Mine:
             if GlobalCfg.network and self.node is not None:
                 await self.node.send_mined_block(self.setup_block)
             if add_block and type(self.blockchain) is BlockChain:
-                self.blockchain.add_new_block(self.setup_block, ignore_validation=True)
+                self.blockchain.add_new_block(
+                    self.setup_block, ignore_validation=True, difficulty=difficulty)
                 logging.debug(f"New blockchain: {self.blockchain.get_hashes()}")
             elif add_block:
                 self.blockchain.append(self.setup_block)
