@@ -202,7 +202,7 @@ class Block:
                 return i
         return None
 
-    def get_data(self, is_full_lock=True, is_POSIX_timestamp=True) -> dict[str, Any]:
+    def get_data(self, is_full_block=True, is_POSIX_timestamp=True) -> dict[str, Any]:
         """
             get data of block that has:
                 header:
@@ -241,7 +241,7 @@ class Block:
             "time": self.time if is_POSIX_timestamp else datetime.fromtimestamp(self.time).__str__()
         }
         data = block_header
-        if is_full_lock:
+        if is_full_block:
             trx_list = []
             for i in range(len(self.transactions)):
                 trx = self.transactions[i].get_data()
