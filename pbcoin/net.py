@@ -14,7 +14,8 @@ from typing import (
     List,
     NewType,
     Optional,
-    Tuple
+    Tuple,
+    Union
 )
 
 from ellipticcurve.publicKey import PublicKey
@@ -31,9 +32,6 @@ from .wallet import Wallet
 
 
 logging = getLogger(__name__)
-
-def sizeof(data):
-    return '{:>08d}'.format(getsizeof(data))
 
 AsyncWriter = NewType("AsyncWriter", asyncio.StreamWriter)
 AsyncReader = NewType("AsyncReader", asyncio.StreamReader)
@@ -85,7 +83,7 @@ class Node:
         self,
         dst_ip: str,
         dst_port: str
-    ) -> Tuple[AsyncReader, asyncio.StreamWriter]:
+    ) -> Tuple[AsyncReader, AsyncWriter]:
         """make a connection to destination ip and port and return stream reader and writer"""
         try:
             reader, writer = await asyncio.open_connection(dst_ip, int(dst_port))
@@ -125,9 +123,8 @@ class Node:
         rec_data = b''
         try:
             reader, writer = await self.connect_to(dst_ip, dst_port)
-            writer.write(bytes(sizeof(data).encode()))
-            writer.write(bytes(data.encode()))
-            await writer.drain()
+            if not await self.write(writer, data):
+                return rec_data
             if wait_for_receive:
                 size_data = await reader.read(NETWORK_DATA_SIZE)
                 size_data = int(size_data)
@@ -162,6 +159,23 @@ class Node:
             finally:
                 # await self.server.wait_closed()
                 self.is_listening = False
+
+    async def write(self, writer: AsyncWriter, data: Union[str, bytes], flush=True) -> bool:
+        """write data from writer to destination and if successfully return true
+        otherwise return False
+        """
+        sizeof = lambda input_data : '{:>08d}'.format(getsizeof(input_data)).encode()
+
+        if isinstance(data, str):
+            data = data.encode()
+        try:
+            writer.write(sizeof(data))
+            writer.write(data)
+            if flush:
+                await writer.drain()
+        except:
+            return False  # TODO: explain what err and log it and also callers handle err
+        return True
 
     def reset(self, close=True):
         """delete its neighbors and is close is True close the listening"""
@@ -293,8 +307,7 @@ class Node:
 
         # send the result
         bytes_data = json.dumps(final_request).encode()
-        writer.write(sizeof(bytes_data).encode())
-        writer.write(bytes_data)
+        await self.write(writer, bytes_data)
 
     async def handle_delete_neighbor(self, data: Dict[str, Any], writer: AsyncWriter):
         """delete neighbor"""
@@ -310,8 +323,7 @@ class Node:
             logging.info(f"delete neighbor for {self.ip} : {ip}")
             data['status'] = True
         bytes_data = json.dumps(data).encode()
-        writer.write(sizeof(bytes_data).encode())
-        writer.write(bytes_data)
+        await self.write(writer, bytes_data, False)
 
     async def handle_mined_block(self, data: Dict[str, Any]):
         """handle for request finder new block"""
@@ -382,8 +394,7 @@ class Node:
                 "blocks": copy_blockchain.get_data(first_index)
             }
             bytes_data = json.dumps(request).encode()
-            writer.write(sizeof(bytes_data).encode())
-            writer.write(bytes_data)
+            await self.write(writer, bytes_data, False)
 
     async def handle_new_trx(self, data: Dict[str, Any]):
         data['passed_nodes'].append(self.ip)
@@ -423,9 +434,7 @@ class Node:
             "src_ip": self.ip,
             "dst_ip": data["src_ip"],
         }).encode()
-        writer.write(sizeof(bytes_data).encode())
-        writer.write(bytes_data)
-        await writer.drain()
+        await self.write(writer, bytes_data)
 
     async def start_up(self, seeds: List[str], get_blockchain = True):
         """begin to find new neighbors and connect to the blockchain network"""
