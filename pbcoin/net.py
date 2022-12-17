@@ -126,9 +126,7 @@ class Node:
             if not await self.write(writer, data):
                 return rec_data
             if wait_for_receive:
-                size_data = await reader.read(NETWORK_DATA_SIZE)
-                size_data = int(size_data)
-                rec_data = await reader.read(size_data)
+                rec_data = await self.read(reader)
                 logging.debug(
                     f'receive data from {dst_ip}:{dst_port} {rec_data.decode()}')
             writer.close()
@@ -177,6 +175,19 @@ class Node:
             return False  # TODO: explain what err and log it and also callers handle err
         return True
 
+    async def read(self, reader: AsyncReader) -> bytes:
+        """read data from reader if successfully return the data in bytes type
+        otherwise return empty bytes
+        """
+        data = b''
+        try:
+            size_data = await reader.read(NETWORK_DATA_SIZE)
+            size_data = int(size_data)
+            data = await reader.read(size_data)
+        except:
+            return data  # TODO: explain what err and log it and also callers should handle err
+        return data
+
     def reset(self, close=True):
         """delete its neighbors and is close is True close the listening"""
         self.neighbors = dict()
@@ -192,10 +203,11 @@ class Node:
 
     async def handle_requests(self, reader: AsyncReader, writer: AsyncWriter):
         """ handle requests that receive from other nodes """
-        size = int(await reader.read(NETWORK_DATA_SIZE))
-        data = await reader.read(size)
-        logging.debug(f'receive data: {data.decode()}')
-        data = json.loads(data.decode())
+        data = await self.read(reader)
+        data = data.decode()
+        if data == "":
+            return  # TODO: Handle Error
+        logging.debug('receive data: ' + data)
         #TODO: check that request is from neighbors or not
         _type = data['type']
         if _type == ConnectionCode.NEW_NEIGHBOR:
