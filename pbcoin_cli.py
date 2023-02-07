@@ -9,7 +9,7 @@ if os.name == 'nt':
     import win32file
     import win32api
 
-from pbcoin.constants import OS_TYPE, DEFAULT_SOCKET_PATH
+from pbcoin.constants import OS_TYPE, PIPE_SOCKET_PATH
 from pbcoin.cliflag import CliCommandCode, CliErrorCode
 
 
@@ -29,7 +29,7 @@ def usage():
 
 def cli_unix(command_code, args: List[str], socket_path: Optional[str]=None):
     if socket_path == None:
-        socket_path = DEFAULT_SOCKET_PATH
+        socket_path = PIPE_SOCKET_PATH
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock_io: IO
     try:
@@ -56,7 +56,7 @@ def cli_unix(command_code, args: List[str], socket_path: Optional[str]=None):
 
 def cli_win(command_code, args: List[str], pipe_path: Optional[str]=None):
     if pipe_path == None:
-        pipe_path = DEFAULT_SOCKET_PATH
+        pipe_path = PIPE_SOCKET_PATH
     handle = None
     while True:
         try:

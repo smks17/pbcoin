@@ -21,9 +21,9 @@ from typing import (
 from ellipticcurve.publicKey import PublicKey
 from ellipticcurve.signature import Signature
 
+import pbcoin.config as conf
 from .block import Block
 from .blockchain import BlockChain, BlockValidationLevel
-from .config import NetworkCfg
 from .constants import TOTAL_NUMBER_CONNECTIONS, NETWORK_DATA_SIZE
 from .logger import getLogger
 from .mempool import Mempool
@@ -68,9 +68,9 @@ class Node:
         self.ip = ip
         self.port = port
         if not self.ip:
-            self.ip = NetworkCfg.ip
+            self.ip = conf.settings.network.ip
         if not self.port:
-            self.prt = NetworkCfg.port
+            self.prt = conf.settings.network.port
         self.uid = self.calculate_uid(ip, str(port))  # TODO: use public key
         self.neighbors: Dict[str, Tuple[str, int]] = dict()
         self.is_listening = False

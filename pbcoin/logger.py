@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from .config import GlobalCfg, LoggerCfg
+import pbcoin.config as conf
 
 class TracebackInfoFilter(logging.Filter):
     """Clear or restore the exception on log records"""
@@ -20,9 +20,9 @@ class TracebackInfoFilter(logging.Filter):
 
 def getLogger(name: str, do_logging: Optional[bool]=None):
     logger = logging.getLogger(name)
-    if GlobalCfg.config:
+    if conf.settings.glob.config:
         if do_logging is None:
-            logger.disabled = not LoggerCfg.do_logging
+            logger.disabled = not conf.settings.logger.do_logging
         else:
             logger.disabled = not do_logging
     else:
@@ -31,10 +31,10 @@ def getLogger(name: str, do_logging: Optional[bool]=None):
 
     logger.setLevel(logging.DEBUG)
     
-    formatter = logging.Formatter(LoggerCfg.log_format, datefmt=LoggerCfg.log_date_format)
-    logfile = logging.FileHandler(LoggerCfg.log_filename)
+    formatter = logging.Formatter(conf.settings.logger.log_format, datefmt=conf.settings.logger.log_date_format)
+    logfile = logging.FileHandler(conf.settings.logger.log_filename)
     logfile.setFormatter(formatter)
-    logfile.setLevel(LoggerCfg.log_level)
+    logfile.setLevel(conf.settings.logger.log_level)
     logfile.addFilter(TracebackInfoFilter())
 
     console = logging.StreamHandler()

@@ -8,7 +8,7 @@ from ellipticcurve.privateKey import PrivateKey
 from ellipticcurve.signature import Signature
 from ellipticcurve.ecdsa import Ecdsa
 
-from .config import GlobalCfg
+import pbcoin.config as conf
 
 from .trx import Trx, Coin
 import pbcoin.core as core
@@ -69,7 +69,7 @@ class Wallet:
             if not core.MEMPOOL.add_new_transaction(made_trx, self.sign(made_trx), core.BLOCK_CHAIN.last_block, self.walletKey.publicKey()):
                 return False
             # send to nodes and add to network mempool
-            if GlobalCfg.network:
+            if conf.settings.glob.network:
                 await core.NETWORK.send_new_trx(made_trx)
             return True
         else:

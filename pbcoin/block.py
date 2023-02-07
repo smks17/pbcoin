@@ -9,7 +9,7 @@ from hashlib import sha512
 from sys import getsizeof
 from typing import Any, Dict, Optional
 
-from .config import GlobalCfg
+import pbcoin.config as conf
 from .merkle_tree import MerkleTreeNode
 from .trx import Coin, Trx
 
@@ -176,7 +176,7 @@ class Block:
         self,
         unspent_coins: Dict[str, Coin],
         pre_hash = "",
-        difficulty = GlobalCfg.difficulty  # almost for unittest
+        difficulty = conf.settings.glob.difficulty  # almost for unittest
     ) -> BlockValidationLevel:
         """checking validation and return validation level"""
         valid = BlockValidationLevel.Bad

@@ -1,8 +1,8 @@
 from typing import List, Optional, Union
 
+import pbcoin.config as conf
 from .block import Block
 from .blockchain import BlockChain
-from .config import GlobalCfg
 from .logger import getLogger
 from .mempool import Mempool
 from .net import Node
@@ -58,7 +58,8 @@ class Mine:
         self,
         setup_block: Optional[Block] = None,
         add_block = True,
-        difficulty: int = GlobalCfg.difficulty # almost just for unittest
+        difficulty: int = conf.settings.glob.difficulty, # almost just for unittest
+        send_network = conf.settings.glob.network
     ) -> None:
         """Start mining for new block and send to other nodes
         from network if it is setup
@@ -106,7 +107,7 @@ class Mine:
         if self.mined_new:
             logging.info("A Block was mined")
             logging.debug(f"minded block info: {self.setup_block.get_data(True, False)}")
-            if GlobalCfg.network and self.node is not None:
+            if send_network and self.node is not None:
                 await self.node.send_mined_block(self.setup_block)
             if add_block and type(self.blockchain) is BlockChain:
                 self.blockchain.add_new_block(

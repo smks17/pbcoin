@@ -7,9 +7,9 @@ from math import inf
 from threading import Thread
 from typing import NewType, Union
 
+import pbcoin.config as conf
 from .block import Block
 from .mempool import Mempool
-from .config import GlobalCfg, NetworkCfg, LoggerCfg
 from .cli_handler import CliServer
 from .net import Node
 from .wallet import Wallet
@@ -39,9 +39,9 @@ async def mine_starter(how_many: Union[inf_type, int]=inf):
     """
     core.WALLET.gen_key()
     logging.info(f"your public key is generated: {core.WALLET.public_key}")
-    if GlobalCfg.mining:
-        core.BLOCK_CHAIN.is_full_node = GlobalCfg.full_node
-        core.BLOCK_CHAIN.cache = GlobalCfg.cache * 1000  # to bytes
+    if conf.settings.glob.mining:
+        core.BLOCK_CHAIN.is_full_node = conf.settings.glob.full_node
+        core.BLOCK_CHAIN.cache = conf.settings.glob.cache * 1000  # to bytes
         if how_many == inf:
             while True:
                 await core.MINER.mine()
@@ -57,12 +57,13 @@ async def setup_network(has_cli, has_socket_network):
     """Set up network for connect other nodes and cli"""
     handlers = []
     if has_socket_network:
-        core.NETWORK = Node(core.BLOCK_CHAIN, core.WALLET, core.MEMPOOL, core.ALL_OUTPUTS, NetworkCfg.ip, NetworkCfg.port)
-        await core.NETWORK.start_up(NetworkCfg.seeds)
+        core.NETWORK = Node(core.BLOCK_CHAIN, core.WALLET, core.MEMPOOL, core.ALL_OUTPUTS,
+                            conf.settings.network.ip, conf.settings.network.port)
+        await core.NETWORK.start_up(conf.settings.network.seeds)
         core.MINER.node = core.NETWORK
         handlers.append(core.NETWORK.listen())
     if has_cli:
-        cli_server = CliServer(NetworkCfg.socket_path)
+        cli_server = CliServer(conf.settings.network.socket_path)
         handlers.append(cli_server.start())
     loop = asyncio.get_event_loop()
     all_net = await asyncio.gather(*handlers)
@@ -82,9 +83,9 @@ def run(raise_runtime_error=True, how_many_mine: Union[inf_type, int]=inf, reset
                 it determines how many blocks should be mined.If it doesn't pass
                 then it is valued with infinity which means mining forever.
     """
-    if LoggerCfg.do_logging:
+    if conf.settings.logger.do_logging:
         # Clear logfile
-        with open(LoggerCfg.log_filename, "w") as _:
+        with open(conf.settings.logger.log_filename, "w") as _:
             pass
     if reset:
         create_core()
@@ -93,17 +94,17 @@ def run(raise_runtime_error=True, how_many_mine: Union[inf_type, int]=inf, reset
         net_thread = None
         mine_thread = None
         # network thread
-        if GlobalCfg.network:
+        if conf.settings.glob.network:
             net_thread = Thread(target=asyncio.run,
-                args=(setup_network(NetworkCfg.cli, NetworkCfg.socket_network),),
-                kwargs={"debug": GlobalCfg.debug}, name="network", daemon=True)
+                args=(setup_network(conf.settings.network.cli, conf.settings.network.socket_network),),
+                kwargs={"debug": conf.settings.glob.debug}, name="network", daemon=True)
             net_thread.start()
-            logging.debug(f"socket is made in {NetworkCfg.socket_path}")
+            logging.debug(f"socket is made in {conf.settings.network.socket_path}")
         # mine thread
-        if GlobalCfg.mining:
+        if conf.settings.glob.mining:
             mine_thread = Thread(target=asyncio.run,
                                 args=(mine_starter(how_many_mine),),
-                                kwargs={"debug": GlobalCfg.debug},
+                                kwargs={"debug": conf.settings.glob.debug},
                                 name="mining", daemon=True)
             mine_thread.start()
 

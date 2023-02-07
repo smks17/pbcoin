@@ -10,8 +10,8 @@ from typing import (
     Tuple,
 )
 
+import pbcoin.config as conf
 from .block import Block, BlockValidationLevel
-from .config import GlobalCfg
 from .mempool import Mempool
 from .trx import Coin, Trx
 
@@ -34,7 +34,7 @@ class BlockChain:
         self.blocks = blocks
         self.is_full_node = full_node
         if not self.is_full_node:
-            self.cache = GlobalCfg.cache
+            self.cache = conf.settings.glob.cache
 
     def setup_new_block(self, subsidy: Trx, mempool: Mempool):
         """set up a new block in chain for mine"""
@@ -53,7 +53,7 @@ class BlockChain:
         block_: Block,
         unspent_coins: Optional[Dict[str, Coin]]=None,
         ignore_validation=False,
-        difficulty: int = GlobalCfg.difficulty  # almost just for unittest
+        difficulty: int = conf.settings.glob.difficulty  # almost just for unittest
     ) -> Optional[BlockValidationLevel]:
         if not ignore_validation:
             validation = block_.is_valid_block(
@@ -70,7 +70,7 @@ class BlockChain:
         self,
         new_blocks: List[Block],
         unspent_coins: Dict[str, Coin],
-        difficulty: int = GlobalCfg.difficulty  # almost for unittest
+        difficulty: int = conf.settings.glob.difficulty  # almost for unittest
     ) -> Tuple[bool, Optional[int]]:
         """resolve the this blockchain with new blocks
 
@@ -166,7 +166,7 @@ class BlockChain:
     def check_blockchain(
         blocks: List[Block],
         unspent_coins: Dict[str, Coin],
-        difficulty = GlobalCfg.difficulty  # almost just for unittest
+        difficulty = conf.settings.glob.difficulty  # almost just for unittest
     ) -> Tuple[bool, Optional[int]]:
         for index, block in enumerate(blocks):
             pre_hash = ""

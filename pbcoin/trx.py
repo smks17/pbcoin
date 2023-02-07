@@ -11,11 +11,11 @@ from typing import (
 from datetime import datetime
 from hashlib import sha512
 
-from .constants import DEFAULT_SUBSIDY
+from .constants import SUBSIDY
 
 
 class Coin:
-    def __init__(self, owner_: str, index_: int, trx_hash_: str = "", value_=DEFAULT_SUBSIDY):
+    def __init__(self, owner_: str, index_: int, trx_hash_: str = "", value_=SUBSIDY):
         self.owner = owner_
         self.value = value_
         self.trx_hash = trx_hash_
@@ -123,7 +123,7 @@ class Trx:
         if inputs_ == None and outputs_ == None:
             self.senders = []
             self.recipients = [sender_key]
-            self.value = DEFAULT_SUBSIDY
+            self.value = SUBSIDY
             self.hash_trx = self.calculate_hash()
             self.outputs = [Coin(sender_key, 0, self.hash_trx, self.value)]
             self.inputs = []

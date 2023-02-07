@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-from pbcoin.config import GlobalCfg
+import pbcoin.config as conf
 
 def usage():
     print("usage python pbcoin.py [option]")
@@ -63,7 +63,7 @@ def parse_argv(argv: list[str]):
 def main():
     argv = sys.argv
     option = parse_argv(argv)
-    GlobalCfg.update(option)
+    conf.settings.update(option)
     from pbcoin.runner import run
     run()
 
