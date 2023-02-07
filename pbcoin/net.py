@@ -48,7 +48,17 @@ class ConnectionCode(IntEnum):
     ADD_TRX = auto()  # new trx for add to mempool
     PING = auto()  # For pinging other nodes and check connection
 
+class Errno(IntEnum):
+    BAD_MESSAGE = auto()  # message could not be parsed or isn't standard
+    BAD_TYPE_MESSAGE = auto()  # message type is not from ConnectionCode
+    BAD_BLOCK_VALIDATION = auto()  # the block(s) that were sended has problem
+    # TODO: Not implemented
+    NOT_FOUND_IP_AS_NEIGHBORS = auto()  # sender is not my neighbors (for some messages)
+    # TODO: Not implemented
+    BAD_TRANSACTION = auto()  # the transaction(s) that were received has problem 
 
+
+# TODO: change the structure of Network class because this class is very big and general and debugging is hard
 class Node:
     """
     Attribute
@@ -64,7 +74,7 @@ class Node:
     """
 
     def __init__(self, blockchain: BlockChain, wallet: Wallet, mempool: Mempool,
-                unspent_coins: Dict[str, Coin], ip: str, port: int):
+                unspent_coins: Dict[str, Coin], ip: str, port: int, difficulty=conf.settings.glob.difficulty):
         self.ip = ip
         self.port = port
         if not self.ip:
@@ -78,6 +88,10 @@ class Node:
         self.wallet = wallet
         self.mempool = mempool
         self.unspent_coins = unspent_coins
+        self.last_error = None
+        self.connected: Dict[str, Tuple[AsyncReader, AsyncWriter]] = dict()
+        # TODO: delete difficulty from net
+        self.difficulty = difficulty
 
     async def connect_to(
         self,
@@ -91,6 +105,10 @@ class Node:
         except ConnectionError:
             logging.error("Error Connection", exc_info=True)
             raise ConnectionError
+        except Exception:
+            logging.error("Error", exc_info=True)
+            raise Exception
+        self.connected[f"{dst_ip}:{dst_port}"] = (reader, writer)
         return reader, writer
 
     async def connect_and_send(
@@ -129,8 +147,7 @@ class Node:
                 rec_data = await self.read(reader)
                 logging.debug(
                     f'receive data from {dst_ip}:{dst_port} {rec_data.decode()}')
-            writer.close()
-            await writer.wait_closed()
+            await self.disconnected_from(f"{dst_ip}:{dst_port}")
         except ConnectionError:
             logging.error("Error Connection error", exc_info=True)
             raise ConnectionError
@@ -139,6 +156,13 @@ class Node:
                 f"Problem in sending and receiving from {dst_ip}", exc_info=True)
         finally:
             return rec_data
+
+    async def disconnected_from(self, ip, wait_to_close=True):
+        (reader, writer) = self.connected.pop(ip)
+        if not writer.is_closing():
+            writer.close()
+            if wait_to_close:
+                await writer.wait_closed()
 
     async def listen(self):
         """start listening requests from other nodes and callback handle_requests"""
@@ -208,8 +232,22 @@ class Node:
         if data == "":
             return  # TODO: Handle Error
         logging.debug('receive data: ' + data)
+        try:
+            data = json.loads(data)
         #TODO: check that request is from neighbors or not
         _type = data['type']
+        except:
+            error_msg = json.dumps({
+                "status": False,
+                "type": Errno.BAD_MESSAGE
+            }).encode()
+            await self.write(writer, error_msg)
+            await self.disconnected_from(data["src_ip"])
+            return
+        self.connected[data["src_ip"]] = (reader, writer)
+        status = data.get("status", True)
+        if not status:
+            self.handle_error(data)
         if _type == ConnectionCode.NEW_NEIGHBOR:
             await self.handle_new_neighbor(data)
         elif _type == ConnectionCode.NEW_NEIGHBORS_REQUEST:
@@ -225,9 +263,15 @@ class Node:
         elif _type == ConnectionCode.PING:
             await self.handle_ping(data, writer)
         else:
-            raise NotImplementedError  # TODO
-        writer.close()
-        await writer.wait_closed()
+            error_msg = json.dumps({
+                "status": False,
+                "type": Errno.BAD_TYPE_MESSAGE
+            }).encode()
+            await self.write(writer, error_msg)
+        await self.disconnected_from(data["src_ip"])
+
+    def handle_error(self, data):
+        self.last_error = Errno(data["type"])
 
     async def handle_new_neighbor(self, data: Dict[str, Any]):
         """ add new node to neighbors nodes """
