@@ -78,6 +78,8 @@ TOTAL_NUMBER_CONNECTIONS: Final[int] = 2
 # specifies the size of actual data
 NETWORK_DATA_SIZE: Final[int] = 8
 
+TIMEOUT = 1 * 60 #s
+
 PIPE_BUFFER_SIZE = 1024 * 4
 
 # TODO: Could be replace from app args

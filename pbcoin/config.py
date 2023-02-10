@@ -13,7 +13,7 @@ from .constants import *
 
 class GlobalCfg:
     config = False
-    debug: bool = False  # Logging more in debug mode
+    debug: bool = True  # Logging more in debug mode and raise some exception
     mining: bool = True  # Set mining on or off
     cache: int = 15
     full_node: bool = False  # Set full node or not
