@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from copy import deepcopy
 from dataclasses import dataclass
 from enum import IntEnum, auto
 from sys import getsizeof
@@ -119,7 +120,7 @@ class Connection:
                 return None
             logging.debug(
                 f'receive data from {dst_addr.hostname} {rec_data.decode()}')
-            await self.disconnected_from(f"{dst_addr.hostname}")
+            # await self.disconnected_from(f"{dst_addr.hostname}")
         return rec_data
 
     async def disconnected_from(self, addr: Addr, wait_to_close=True):
@@ -182,12 +183,6 @@ class Connection:
             await task.close()
         self.tasks = []
 
-    def close(self):
-        """close listening and close all handler tasks"""
-        if self.is_listening:
-            self.server.close()
-            self.is_listening = False
-
 
 @dataclass
 class PeerHandler:
@@ -207,9 +202,6 @@ class PeerHandler:
         self.addr = addr
         self.writer = writer
         self.reader = reader
-        if self.addr is None and self.writer is not None:
-            ip, port = writer.get_extra_info('peername')
-            self.addr = Addr(ip=ip, port=port)
         self.last_error = last_error
         self.is_connected = is_connected
 
@@ -224,25 +216,79 @@ class PeerHandler:
 class Message:
     status: bool
     type_: Union[ConnectionCode, Errno]
-    dst_addr: Addr
+    addr: Addr
     data: Dict[str, Any]
 
     def __init__(self,
                  status: bool,
                  type_: Union[ConnectionCode, Errno],
-                 dst_addr: Addr,
-                 data: Dict[str, Any]
+                 addr: Addr,
+                 data: Optional[Dict[str, Any]] = None
     ):
         self.status = status
         self.type_ = type_
-        self.dst_addr = dst_addr
+        self.addr = addr
         self.data = data
 
-    def create_message(self, pub_key: str):
+    def create_message(self, my_addr: Addr):
         base_data = {
             "status": self.status,
             "type": self.type_,
-            "dst_addr": self.dst_addr.hostname,
-            "pub_key": pub_key
+            "dst_addr": self.addr.hostname,
+            "src_addr": my_addr.hostname,
+            "pub_key": my_addr.pub_key,
+            "data": self.data
         }
-        return json.dumps(base_data | self.data)
+        return json.dumps(base_data)
+
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> Message:
+        try:
+            copy_data = deepcopy(data)
+            dst_addr = Addr.from_hostname(copy_data["src_ip"])
+            dst_addr.pub_key = copy_data["pub_key"]
+            return Message(copy_data["status"],
+                           copy_data["type"],
+                           dst_addr
+                           ).create_data(copy_data)
+        except KeyError as e:
+            logging.debug("Bad key for parsing data message", exec_info = True)
+
+    @staticmethod
+    def from_str(data: str) -> Message:
+        try:
+            return Message.from_dict(json.loads(data))
+        except KeyError as e:
+            logging.debug("Bad key for parsing data message", exec_info = True)
+
+            
+    def create_data(self, **kwargs):
+        try:
+            if self.type_ == ConnectionCode.NEW_NEIGHBOR:
+                self.data = {
+                    "new_node": kwargs["new_node_hostname"],
+                    "new_pub_key": kwargs["new_pub_key"]
+                }
+            elif self.type_ == ConnectionCode.NEW_NEIGHBORS_REQUEST:
+                self.data = {
+                    "number_connections_requests": kwargs["n_connections"],  # how many neighbors you want
+                    "p2p_nodes": kwargs["p2p_nodes"],  # nodes that are util found
+                    "passed_nodes": kwargs["passed_nodes"] # this request passes from what nodes for searching
+                }
+            elif self.type_ == ConnectionCode.NEW_NEIGHBORS_FIND:
+                self.data = {
+                    "number_connections_requests": kwargs["n_connections"],
+                    "p2p_nodes": kwargs["p2p_nodes"],
+                    "passed_nodes": kwargs["passed_nodes"],
+                    "for_node": kwargs["for_node"]
+
+                }
+            elif self.type_ == ConnectionCode.NOT_NEIGHBOR:
+                self.data = {"node_pub_key": kwargs["node_pub_key"]}
+        except KeyError as e:
+            logging.error("Bad kwargs for creating message data", exec_info = True)
+        return self
+
+    def copy(self) -> Message:
+        return deepcopy(self)
+

@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 import json
-from typing import Dict, Tuple
+import random
+from sys import argv
+from typing import (
+    Any,
+    Dict,
+    Generator,
+    Iterable,
+    Tuple
+)
 
 import pbcoin.config as conf
+from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
 from pbcoin.logger import getLogger
 from pbcoin.netbase import (
     Addr,
@@ -30,6 +40,7 @@ class Node:
         self.neighbors: Dict[str, Tuple[str, int]] = dict()
         self.connected: Dict[str, str] = dict()
         self.tasks = []  # save all tasks that process message
+        self.messages_history: Dict[str, Any] = dict()  # TODO: use kinda combination of OrderedSet & Queue
         
     async def handle_peer(self, reader: AsyncReader, writer: AsyncWriter):
         """ this is a callback method that
@@ -49,6 +60,7 @@ class Node:
         try:
             data = json.loads(data)
             #TODO: check that request is from neighbors or not
+            peer_handler.addr = Addr.from_hostname(data["src_addr"])
             type_ = data['type']
             pub_key = data["pub_key"]
             actual_data = data["data"]
@@ -57,8 +69,13 @@ class Node:
             type_ = Errno.BAD_MESSAGE
             logging.debug(f"Bad message from {peer_handler.addr}")
         peer_handler.addr.pub_key = pub_key  # TODO: maybe it's better right check for pub_key 
-        message = Message(status=status, type_=type_, dst_addr=peer_handler.addr, data=actual_data)
-        proc_handler = ProcessingHandler(message=message, node=self)
+        message = Message(status=status,
+                          type_=type_,
+                          addr=peer_handler.addr,
+                          data=actual_data)
+        proc_handler = ProcessingHandler(message=message,
+                                         node=self,
+                                         peer_handler=peer_handler)
         if not conf.settings.glob.debug:
             self.tasks.append(asyncio.create_task(proc_handler.handle()))
         else:
@@ -87,61 +104,49 @@ class Node:
             finally:
                 self.is_listening = False
 
-    async def write(self,
-                    peer_handler: PeerHandler,
-                    data: Union[str, bytes],
-                    flush=True
-    ) -> Optional[Exception]:
-        """write data from writer to destination and if successfully return true
-        otherwise return False
-        """
-        if peer_handler.writer is None : return Exception("Pass a non writable handler")
-        sizeof = lambda input_data : '{:>08d}'.format(getsizeof(input_data)).encode()
-        writer = peer_handler.writer
-               
-        if isinstance(data, str):
-            data = data.encode()
-        try:
-            writer.write(sizeof(data))
-            writer.write(data)
-            if flush:
-                await writer.drain()
-        except Exception as e:
-            logging.error(f"Could not write message to {peer_handler.addr}")
-            return e
-        return None
+    def add_neighbor(self, new_addr: Addr):
+        if not self.is_my_neighbor(new_addr):
+            self.neighbors[new_addr.pub_key] = new_addr
+        else:
+            pass  # TODO: handle error
 
-    async def read(self, peer_handler: PeerHandler) -> Optional[bytes]:
-        """read data from reader if successfully return the data in bytes type
-        otherwise return empty bytes
-        """
-        if peer_handler.reader is None : return None
-        reader = peer_handler.reader
-        data = b''
-        try:
-            size_data = await reader.read(NETWORK_DATA_SIZE)
-            size_data = int(size_data)
-            data = await reader.read(size_data)
-        except Exception as e:
-            logging.error(f"Could not read message from {peer_handler.addr}")
-            return data
-        return data
+    def delete_neighbor(self, addr: Addr):
+        if self.is_my_neighbor(addr):
+            self.neighbors.pop(addr.pub_key)
+        else:
+            pass  # TODO: handle error
+        
+        
+    def is_my_neighbor(self, addr: Addr) -> bool:
+        return self.neighbors.get(addr.pub_key, None) is not None
+            
+    def add_message_history(self, message: Message):
+        self.messages_history[message.addr.pub_key] = message
 
-    # TODO: implement reset and close without waiting
-    async def reset(self, close=True):
-        """delete its neighbors and close the listening too"""
-        self.neighbors = dict()
-        if close:
-            self.close()
-        for task in self.tasks:
-            await task.close()
-        self.tasks = []
+    def allow_new_neighbor(self):
+        return len(self.neighbors) < TOTAL_NUMBER_CONNECTIONS
+
+    def has_capacity_neighbors(self):
+        return len(self.neighbors) == TOTAL_NUMBER_CONNECTIONS
+    
+    def iter_neighbors(self, forbidden: Iterable[str] = [], shuffle = True) -> Generator:
+        copy_neighbors = deepcopy(self.neighbors)
+        if shuffle:
+            random.shuffle(copy_neighbors)
+        for pub_key in copy_neighbors:
+            addr = self.neighbors.get(pub_key)
+            if addr == None:
+                continue  #! It's kinda non reachable at all
+            # doesn't send data to the repetitious/forbidden nodes
+            # maybe later stuck in a loop
+            if addr.hostname not in forbidden:
+                yield addr
 
     def close(self):
         """close listening and close all handler tasks"""
         if self.is_listening:
             self.server.close()
             self.is_listening = False
-        for task in self.tasks:
-            await task.close()
-
+  
+    @property
+    def hostname(self) -> str: return self.conn.addr.hostname
