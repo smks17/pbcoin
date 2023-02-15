@@ -79,7 +79,7 @@ class Connection:
     async def connect_to(self, dst_addr: Addr) -> PeerHandler:
         """make a connection to destination addr and return stream reader and writer"""
         try:
-            fut = asyncio.open_connection(dst_addr.ip, str(dst_addr.port))
+            fut = asyncio.open_connection(dst_addr.ip, dst_addr.port)
             logging.debug(f"from {self.addr.hostname} Connect to {dst_addr.hostname}")
             reader, writer = await asyncio.wait_for(fut, timeout=self.timeout)
             peer_handler = PeerHandler(addr=dst_addr,
@@ -245,14 +245,15 @@ class Message:
     def from_dict(data: Dict[str, Any]) -> Message:
         try:
             copy_data = deepcopy(data)
-            dst_addr = Addr.from_hostname(copy_data["src_ip"])
+            dst_addr = Addr.from_hostname(copy_data["src_addr"])
             dst_addr.pub_key = copy_data["pub_key"]
             return Message(copy_data["status"],
                            copy_data["type"],
                            dst_addr
-                           ).create_data(copy_data)
+                           ).create_data(**(copy_data["data"]))
         except KeyError as e:
             logging.debug("Bad key for parsing data message", exec_info = True)
+            raise e
 
     @staticmethod
     def from_str(data: str) -> Message:
@@ -260,6 +261,7 @@ class Message:
             return Message.from_dict(json.loads(data))
         except KeyError as e:
             logging.debug("Bad key for parsing data message", exec_info = True)
+            raise e
 
             
     def create_data(self, **kwargs):
@@ -271,13 +273,13 @@ class Message:
                 }
             elif self.type_ == ConnectionCode.NEW_NEIGHBORS_REQUEST:
                 self.data = {
-                    "number_connections_requests": kwargs["n_connections"],  # how many neighbors you want
+                    "n_connections": kwargs["n_connections"],  # how many neighbors you want
                     "p2p_nodes": kwargs["p2p_nodes"],  # nodes that are util found
                     "passed_nodes": kwargs["passed_nodes"] # this request passes from what nodes for searching
                 }
             elif self.type_ == ConnectionCode.NEW_NEIGHBORS_FIND:
                 self.data = {
-                    "number_connections_requests": kwargs["n_connections"],
+                    "n_connections": kwargs["n_connections"],
                     "p2p_nodes": kwargs["p2p_nodes"],
                     "passed_nodes": kwargs["passed_nodes"],
                     "for_node": kwargs["for_node"]

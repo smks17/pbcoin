@@ -14,6 +14,7 @@ logging = getLogger(__name__)
 
 class ProcessingHandler:
     def __init__(self, message: Message, node: Node, peer_handler: PeerHandler):
+        # TODO: Check the structure of message data is correct or not 
         self.message = message
         self.node = node
         self.peer_handler = peer_handler
@@ -55,9 +56,9 @@ class ProcessingHandler:
         print(f"Neighbors: {self.node.neighbors}!")
         
     async def handle_request_new_node(self):
-        # TODO: this method maybe has error and should be debuged
+        # TODO: for max TOTAL_NUMBER_CONNECTIONS should be test
         """handle a new node for add to the network by finding new neighbors for it"""
-        n_connections = int(self.message.data["number_connections_requests"])
+        n_connections = int(self.message.data["n_connections"])
         self.message.data["passed_nodes"].append(self.node.hostname)
         to_request_other = Message(
             status = True,
@@ -76,18 +77,24 @@ class ProcessingHandler:
         if n_connections != 0:
             # prepare message to send other nodes for search
             new_request = to_request_other.copy()
+            # TODO: her it is awaiting for each request and ech node play a gather neighbors
+            # TODO: it's better we could implement someway that could be connect directly and delete the middlenodes
             for addr in self.node.iter_neighbors(new_request.data["passed_nodes"]):
                 new_request.addr = addr
                 try:
-                    await self.node.conn.connect_and_send(
+                    response = await self.node.conn.connect_and_send(
                         addr,
-                        new_request.create_message(self.conn.node.addr),
-                        wait_for_receive=False)
-                    to_request_other = Message.from_str(response.decode())
-                    n_connections = to_request_other['number_connections_requests']
+                        new_request.create_message(self.node.conn.addr),
+                        wait_for_receive=True)
+                    if response is None:
+                        continue
+                    response = Message.from_str(response.decode())
+                    if response.status == False:
+                        continue
+                    n_connections = response.data["n_connections"]
                 except ConnectionError:
                     # TODO: checking for connection that neighbor is online yet?
-                    logging.error("", exc_info=True)
+                    logging.error(f"Could not connect and send data to {addr}", exc_info=True)
                 except KeyError:
                     pass  # TODO
                 # We find all its neighbors
@@ -116,17 +123,16 @@ class ProcessingHandler:
                                 type_=ConnectionCode.NEW_NEIGHBORS_FIND,
                                 addr=self.message.addr).create_data(
                                     p2p_nodes = to_request_other.data["p2p_nodes"],
-                                    n_connections = to_request_other.data["number_connections_requests"],
+                                    n_connections = to_request_other.data["n_connections"],
                                     passed_nodes = to_request_other.data["passed_nodes"],
                                     for_node = self.message.addr.hostname
                                 )
-        await self.node.conn.connect_and_send(
-            self.message.addr,
-            final_request.create_message(self.node.conn.addr),
-            wait_for_receive=False)
+        await self.node.conn.write(self.peer_handler.writer,
+                                   final_request.create_message(self.node.conn.addr),
+                                   self.message.addr)
     
-    def handle_found_neighbors(self):
-        raise NotImplementedError("This method is not implemented yet!")
+    async def handle_found_neighbors(self):
+        raise NotImplementedError("This method is not used!")
 
     def handle_delete_neighbor(self):
         raise NotImplementedError("This method is not implanted yet!")
