@@ -35,9 +35,9 @@ from pbcoin.process_handler import ProcessingHandler
 logging = getLogger(__name__)
 
 
-class Node:
-    def __init__(self, conn: Connection):
-        self.conn = conn
+class Node(Connection):
+    def __init__(self, addr: Addr, timeout: Optional[float] = None):
+        super().__init__(addr, timeout)
         self.is_listening = False
         self.neighbors: Dict[str, Tuple[str, int]] = dict()
         self.connected: Dict[str, str] = dict()
@@ -48,7 +48,7 @@ class Node:
         """ this is a callback method that
         handles requests data that receive from other nodes"""
         peer_handler = PeerHandler(writer=writer, reader=reader)
-        data = await self.conn.read(peer_handler.reader, peer_handler.addr)
+        data = await self.read(peer_handler.reader, peer_handler.addr)
         if data is None:
             raise Exception("Something wrong with read method and returns None")
         data = data.decode()
@@ -78,8 +78,8 @@ class Node:
     async def listen(self):
         """start listening requests from other nodes and callback self.handle_peer"""
         try:
-            ip_host = self.conn.addr.ip
-            port_host = self.conn.addr.port
+            ip_host = self.addr.ip
+            port_host = self.addr.port
             self.server = await asyncio.start_server(
                 self.handle_peer, host=ip_host, port=port_host)
         except Exception as e:
@@ -150,8 +150,8 @@ class Node:
                               type_=ConnectionCode.NEW_NEIGHBORS_REQUEST,
                               addr=seed).create_data(n_connections = TOTAL_NUMBER_CONNECTIONS,
                                                      p2p_nodes = [],
-                                                     passed_nodes = [self.hostname])
-            response = await self.conn.connect_and_send(seed, request.create_message(self.conn.addr), wait_for_receive=True)
+                                                     passed_nodes = [self.addr.hostname])
+            response = await self.connect_and_send(seed, request.create_message(self.addr), wait_for_receive=True)
             response = Message.from_str(response.decode())
             nodes += Addr.convert_to_addr_list(response.data['p2p_nodes'])
             # checking find all neighbors
@@ -165,18 +165,15 @@ class Node:
         for node in nodes:
             final_request = Message(True,
                                     ConnectionCode.NEW_NEIGHBOR,
-                                    node).create_data(new_node = self.hostname,
-                                                      new_pub_key = self.conn.addr.pub_key)
+                                    node).create_data(new_node = self.addr.hostname,
+                                                      new_pub_key = self.addr.pub_key)
             # TODO: Get the ok message without waiting
-            response = await self.conn.connect_and_send(node, final_request.create_message(self.conn.addr), wait_for_receive=True)
+            response = await self.connect_and_send(node, final_request.create_message(self.addr), wait_for_receive=True)
             response = Message.from_str(response.decode())
             self.add_neighbor(response.addr)
-            logging.info(f"new neighbors for {self.hostname} : {node.hostname}")
+            logging.info(f"new neighbors for {self.addr.hostname} : {node.hostname}")
 
             if get_blockchain:
                 # get block chain from other nodes
                 #TODO: resolve blockchain
                 raise NotImplementedError("Not implemented get block and blockchain yet!")
-            
-    @property
-    def hostname(self) -> str: return self.conn.addr.hostname

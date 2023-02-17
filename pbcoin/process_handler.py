@@ -51,21 +51,21 @@ class ProcessingHandler:
         new_node_addr = Addr.from_hostname(self.message.data["new_node"])  # maybe it's better check with itself
         new_node_addr.pub_key = self.message.data["new_pub_key"]
         self.node.add_neighbor(new_node_addr)
-        logging.info(f"New neighbor for {self.node.hostname} : {new_node_addr.hostname}")
+        logging.info(f"New neighbor for {self.node.addr.hostname} : {new_node_addr.hostname}")
         self.node.add_message_history(self.message)
         response = Message(True,
                            ConnectionCode.NEW_NEIGHBOR,
                            self.message.addr
                            ).create_data(
-                               new_node=self.node.hostname,
-                               new_pub_key=self.node.conn.addr.pub_key)
-        await self.node.conn.write(self.peer_handler.writer, response.create_message(self.node.conn.addr), self.message.addr)
+                               new_node=self.node.addr.hostname,
+                               new_pub_key=self.node.addr.pub_key)
+        await self.node.write(self.peer_handler.writer, response.create_message(self.node.addr), self.message.addr)
         print(f"Neighbors: {self.node.neighbors}!")
         
     async def handle_request_new_node(self):
         """handle a new node for add to the network by finding new neighbors for it"""
         n_connections = int(self.message.data["n_connections"])
-        self.message.data["passed_nodes"].append(self.node.hostname)
+        self.message.data["passed_nodes"].append(self.node.addr.hostname)
         to_request_other = Message(
             status = True,
             type_ = ConnectionCode.NEW_NEIGHBORS_REQUEST,
@@ -78,7 +78,7 @@ class ProcessingHandler:
         # add the new neighbor to itself if its capacity neighbors are not filled yet
         if self.node.allow_new_neighbor():
             n_connections -= 1
-            to_request_other.data["p2p_nodes"].append(f"{self.node.hostname}")
+            to_request_other.data["p2p_nodes"].append(f"{self.node.addr.hostname}")
         # if still need new neighbors
         new_nodes = set()
         if n_connections != 0:
@@ -89,9 +89,9 @@ class ProcessingHandler:
             for addr in self.node.iter_neighbors(new_request.data["passed_nodes"]):
                 new_request.addr = addr
                 try:
-                    response = await self.node.conn.connect_and_send(
+                    response = await self.node.connect_and_send(
                         addr,
-                        new_request.create_message(self.node.conn.addr),
+                        new_request.create_message(self.node.addr),
                         wait_for_receive=True)
                     if response is None:
                         continue
@@ -117,14 +117,14 @@ class ProcessingHandler:
                 request = Message(status=True,
                                   type_=ConnectionCode.NOT_NEIGHBOR,
                                   addr=addr
-                          ).create_data(node_hostname=self.node.hostname,
-                                        pub_key=self.node.conn.addr.pub_key)
-                response = await self.node.conn.connect_and_send(addr, request.create_message(self.node.conn.addr))
+                          ).create_data(node_hostname=self.node.addr.hostname,
+                                        pub_key=self.node.addr.pub_key)
+                response = await self.node.connect_and_send(addr, request.create_message(self.node.addr))
                 response = Message.from_str(response.decode())
                 if response.status == True:
                     self.node.delete_neighbor(addr)
-                    logging.info(f"delete neighbor for {self.node.hostname} : {addr}")
-                    new_nodes = [f"{self.node.hostname}", f"{addr.hostname}"]
+                    logging.info(f"delete neighbor for {self.node.addr.hostname} : {addr}")
+                    new_nodes = [f"{self.node.addr.hostname}", f"{addr.hostname}"]
                     to_request_other.data["p2p_nodes"] += new_nodes
                     to_request_other.data['n_connections'] -= 2
                     break
@@ -137,8 +137,8 @@ class ProcessingHandler:
                                     passed_nodes = to_request_other.data["passed_nodes"],
                                     for_node = self.message.addr.hostname
                                 )
-        await self.node.conn.write(self.peer_handler.writer,
-                                   final_request.create_message(self.node.conn.addr),
+        await self.node.write(self.peer_handler.writer,
+                                   final_request.create_message(self.node.addr),
                                    self.message.addr)
     
     async def handle_found_neighbors(self):
@@ -149,18 +149,18 @@ class ProcessingHandler:
         response = Message(status=True,
                            type_=ConnectionCode.NOT_NEIGHBOR,
                            addr=self.message.addr).create_data(
-                               node_hostname = self.node.hostname,
-                               pub_key = self.node.conn.addr.pub_key
+                               node_hostname = self.node.addr.hostname,
+                               pub_key = self.node.addr.pub_key
                            )
         addr = Addr.from_hostname(self.message.data["node_hostname"])
         addr.pub_key = self.message.data["pub_key"]
         if self.node.delete_neighbor(addr):
-            logging.info(f"delete neighbor for {self.node.hostname}: {self.message.addr.hostname}")
+            logging.info(f"delete neighbor for {self.node.addr.hostname}: {self.message.addr.hostname}")
         else:
             # TODO: make a error message
             response.status = False
         self.node.add_message_history(self.message)
-        await self.node.conn.write(self.peer_handler.writer, response.create_message(self.node.conn.addr), self.message.addr) 
+        await self.node.write(self.peer_handler.writer, response.create_message(self.node.addr), self.message.addr) 
         
     def handle_mined_block(self):
         raise NotImplementedError("This method is not implemented yet!")
