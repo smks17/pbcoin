@@ -110,11 +110,12 @@ class Node:
         else:
             pass  # TODO: handle error
 
-    def delete_neighbor(self, addr: Addr):
+    def delete_neighbor(self, addr: Addr) -> bool:
         if self.is_my_neighbor(addr):
             self.neighbors.pop(addr.pub_key)
+            return True
         else:
-            pass  # TODO: handle error
+            return False
         
         
     def is_my_neighbor(self, addr: Addr) -> bool:

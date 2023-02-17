@@ -134,9 +134,23 @@ class ProcessingHandler:
     async def handle_found_neighbors(self):
         raise NotImplementedError("This method is not used!")
 
-    def handle_delete_neighbor(self):
-        raise NotImplementedError("This method is not implanted yet!")
-
+    async def handle_delete_neighbor(self):
+        # TODO: send the result with nonblock
+        # TODO: test and debug
+        response = Message(status=True,
+                           type_=ConnectionCode.NOT_NEIGHBOR,
+                           addr=self.message.addr).create_data(
+                               node_hostname = self.node.hostname,
+                               pub_key = self.node.conn.pub_key
+                           )
+        if self.node.delete_neighbor(self.message.data["node_hostname"]):
+            logging.info(f"delete neighbor for {self.node.hostname}: {self.message.addr.hostname}")
+        else:
+            # TODO: make a error message
+            response.status = False
+        self.node.add_message_history(self.message)
+        await self.node.conn.write(self.peer_handler.writer, response.create_message(self.node.conn.addr), self.message.addr) 
+        
     def handle_mined_block(self):
         raise NotImplementedError("This method is not implemented yet!")
         

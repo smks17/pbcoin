@@ -285,6 +285,11 @@ class Message:
                     "for_node": kwargs["for_node"]
 
                 }
+            elif self.type == ConnectionCode.NOT_NEIGHBOR:
+                self.data = {
+                    "new_node": kwargs["node_hostname"],
+                    "new_pub_key": kwargs["pub_key"]
+                }
             elif self.type_ == ConnectionCode.NOT_NEIGHBOR:
                 self.data = {"node_pub_key": kwargs["node_pub_key"]}
         except KeyError as e:
