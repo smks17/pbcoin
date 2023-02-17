@@ -12,6 +12,7 @@ from typing import (
     Dict,
     Generator,
     Iterable,
+    List,
     Tuple
 )
 
@@ -23,6 +24,7 @@ from pbcoin.netbase import (
     AsyncReader,
     AsyncWriter,
     Connection,
+    ConnectionCode,
     Errno,
     Message,
     PeerHandler
@@ -54,25 +56,15 @@ class Node:
             logging.warning(f"Get a empty data from {peer_handler.addr}")
             return
         logging.debug('receive data: ' + data)
-        status = True
-        pub_key = None
-        actual_data = None
+        message = None
         try:
-            data = json.loads(data)
             #TODO: check that request is from neighbors or not
-            peer_handler.addr = Addr.from_hostname(data["src_addr"])
-            type_ = data['type']
-            pub_key = data["pub_key"]
-            actual_data = data["data"]
-        except:
-            status = False
-            type_ = Errno.BAD_MESSAGE
+            message = Message.from_str(data)
+        except Exception as e:
+            #TODO: Create error message
             logging.debug(f"Bad message from {peer_handler.addr}")
-        peer_handler.addr.pub_key = pub_key  # TODO: maybe it's better right check for pub_key 
-        message = Message(status=status,
-                          type_=type_,
-                          addr=peer_handler.addr,
-                          data=actual_data)
+            return
+        peer_handler.addr = message.addr  # TODO: maybe it's better right check for pub_key 
         proc_handler = ProcessingHandler(message=message,
                                          node=self,
                                          peer_handler=peer_handler)
@@ -131,10 +123,10 @@ class Node:
         return len(self.neighbors) == TOTAL_NUMBER_CONNECTIONS
     
     def iter_neighbors(self, forbidden: Iterable[str] = [], shuffle = True) -> Generator:
-        copy_neighbors = deepcopy(self.neighbors)
+        copy_neighbors_pub_key = deepcopy(list(self.neighbors.keys()))
         if shuffle:
-            random.shuffle(copy_neighbors)
-        for pub_key in copy_neighbors:
+            random.shuffle(copy_neighbors_pub_key)
+        for pub_key in copy_neighbors_pub_key:
             addr = self.neighbors.get(pub_key)
             if addr == None:
                 continue  #! It's kinda non reachable at all
@@ -148,6 +140,43 @@ class Node:
         if self.is_listening:
             self.server.close()
             self.is_listening = False
-  
+
+    async def start_up(self, seeds: List[str], get_blockchain = True):
+        """begin to find new neighbors and connect to the blockchain network"""
+        nodes = []
+        seeds = Addr.convert_to_addr_list(seeds)
+        for seed in seeds:
+            request = Message(status=True,
+                              type_=ConnectionCode.NEW_NEIGHBORS_REQUEST,
+                              addr=seed).create_data(n_connections = TOTAL_NUMBER_CONNECTIONS,
+                                                     p2p_nodes = [],
+                                                     passed_nodes = [self.hostname])
+            response = await self.conn.connect_and_send(seed, request.create_message(self.conn.addr), wait_for_receive=True)
+            response = Message.from_str(response.decode())
+            nodes += Addr.convert_to_addr_list(response.data['p2p_nodes'])
+            # checking find all neighbors
+            if (response.status == True
+                and response.type_ == ConnectionCode.NEW_NEIGHBORS_FIND
+                and response.data['n_connections'] == 0
+            ):
+                break
+
+        # sending found nodes for requesting neighbors
+        for node in nodes:
+            final_request = Message(True,
+                                    ConnectionCode.NEW_NEIGHBOR,
+                                    node).create_data(new_node = self.hostname,
+                                                      new_pub_key = self.conn.addr.pub_key)
+            # TODO: Get the ok message without waiting
+            response = await self.conn.connect_and_send(node, final_request.create_message(self.conn.addr), wait_for_receive=True)
+            response = Message.from_str(response.decode())
+            self.add_neighbor(response.addr)
+            logging.info(f"new neighbors for {self.hostname} : {node.hostname}")
+
+            if get_blockchain:
+                # get block chain from other nodes
+                #TODO: resolve blockchain
+                raise NotImplementedError("Not implemented get block and blockchain yet!")
+            
     @property
     def hostname(self) -> str: return self.conn.addr.hostname

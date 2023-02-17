@@ -9,6 +9,7 @@ from sys import getsizeof
 from typing import (
     Any,
     Dict,
+    List,
     NewType,
     Optional,
     Union
@@ -60,6 +61,10 @@ class Addr:
     @property
     def hostname(self): return f"{self.ip}:{self.port}"
 
+    @staticmethod
+    def convert_to_addr_list(l: List[str]):
+        return list(map(Addr.from_hostname, l))
+    
     def __str__(self) -> str:
         if self.pub_key is None:
             return self.hostname
@@ -70,27 +75,27 @@ class Addr:
 
 
 class Connection:
-    def __init__(self, addr: Addr, timeout: Optional[float] = TIMEOUT):
+    def __init__(self, addr: Addr, timeout: Optional[float] = None):
         self.addr = addr
         if not self.addr:
             self.addr = Addr(ip=conf.settings.network.ip, port=conf.settings.network.port, pub_key=None)
         self.timeout = timeout
     
-    async def connect_to(self, dst_addr: Addr) -> PeerHandler:
+    async def connect_to(self, src_addr: Addr) -> PeerHandler:
         """make a connection to destination addr and return stream reader and writer"""
         try:
-            fut = asyncio.open_connection(dst_addr.ip, dst_addr.port)
-            logging.debug(f"from {self.addr.hostname} Connect to {dst_addr.hostname}")
+            fut = asyncio.open_connection(src_addr.ip, src_addr.port)
+            logging.debug(f"from {self.addr.hostname} Connect to {src_addr.hostname}")
             reader, writer = await asyncio.wait_for(fut, timeout=self.timeout)
-            peer_handler = PeerHandler(addr=dst_addr,
+            peer_handler = PeerHandler(addr=src_addr,
                                     writer=writer,
                                     reader=reader,
                                     is_connected=True)
         except asyncio.TimeoutError:
-            logging.debug(f"Timeout Error connect to {dst_addr}")
+            logging.debug(f"Timeout Error connect to {src_addr}")
             return None
-        except ConnectionError:
-            logging.error(f"Connection Error to {dst_addr}", exc_info=True)
+        except ConnectionError as e:
+            logging.error(f"Connection Error to {src_addr}", exc_info=True)
             return None
         except Exception as e:
             logging.error(f"Error", exc_info=True)
@@ -98,7 +103,7 @@ class Connection:
         return peer_handler
 
     async def connect_and_send(self,
-                               dst_addr: Addr,
+                               src_addr: Addr,
                                data: str,
                                wait_for_receive=True
     ) -> Optional[bytes]:
@@ -106,7 +111,7 @@ class Connection:
         is True wait to recieve data from destination and return data"""
         rec_data = b''
         # try to connect
-        peer_handler = await self.connect_to(dst_addr)
+        peer_handler = await self.connect_to(src_addr)
         if peer_handler is None:
             return None
         # write the data
@@ -119,8 +124,8 @@ class Connection:
             if rec_data is None:
                 return None
             logging.debug(
-                f'receive data from {dst_addr.hostname} {rec_data.decode()}')
-            # await self.disconnected_from(f"{dst_addr.hostname}")
+                f'receive data from {src_addr.hostname} {rec_data.decode()}')
+            # await self.disconnected_from(f"{src_addr.hostname}")
         return rec_data
 
     async def disconnected_from(self, addr: Addr, wait_to_close=True):
@@ -234,7 +239,7 @@ class Message:
         base_data = {
             "status": self.status,
             "type": self.type_,
-            "dst_addr": self.addr.hostname,
+            "src_addr": self.addr.hostname,
             "src_addr": my_addr.hostname,
             "pub_key": my_addr.pub_key,
             "data": self.data
@@ -245,12 +250,15 @@ class Message:
     def from_dict(data: Dict[str, Any]) -> Message:
         try:
             copy_data = deepcopy(data)
-            dst_addr = Addr.from_hostname(copy_data["src_addr"])
-            dst_addr.pub_key = copy_data["pub_key"]
-            return Message(copy_data["status"],
-                           copy_data["type"],
-                           dst_addr
-                           ).create_data(**(copy_data["data"]))
+            src_addr = Addr.from_hostname(copy_data["src_addr"])
+            src_addr.pub_key = copy_data["pub_key"]
+            new_message = Message(copy_data["status"],
+                                  copy_data["type"],
+                                  src_addr)
+            extra_data = copy_data.get("data", None)
+            if extra_data is None:
+                return new_message
+            return new_message.create_data(**extra_data)
         except KeyError as e:
             logging.debug("Bad key for parsing data message", exec_info = True)
             raise e
@@ -262,13 +270,12 @@ class Message:
         except KeyError as e:
             logging.debug("Bad key for parsing data message", exec_info = True)
             raise e
-
             
     def create_data(self, **kwargs):
         try:
             if self.type_ == ConnectionCode.NEW_NEIGHBOR:
                 self.data = {
-                    "new_node": kwargs["new_node_hostname"],
+                    "new_node": kwargs["new_node"],
                     "new_pub_key": kwargs["new_pub_key"]
                 }
             elif self.type_ == ConnectionCode.NEW_NEIGHBORS_REQUEST:
@@ -285,13 +292,11 @@ class Message:
                     "for_node": kwargs["for_node"]
 
                 }
-            elif self.type == ConnectionCode.NOT_NEIGHBOR:
-                self.data = {
-                    "new_node": kwargs["node_hostname"],
-                    "new_pub_key": kwargs["pub_key"]
-                }
             elif self.type_ == ConnectionCode.NOT_NEIGHBOR:
-                self.data = {"node_pub_key": kwargs["node_pub_key"]}
+                self.data = {
+                    "node_hostname": kwargs["node_hostname"],
+                    "pub_key": kwargs["pub_key"]
+                }
         except KeyError as e:
             logging.error("Bad kwargs for creating message data", exec_info = True)
         return self

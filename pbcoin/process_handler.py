@@ -53,10 +53,16 @@ class ProcessingHandler:
         self.node.add_neighbor(new_node_addr)
         logging.info(f"New neighbor for {self.node.hostname} : {new_node_addr.hostname}")
         self.node.add_message_history(self.message)
+        response = Message(True,
+                           ConnectionCode.NEW_NEIGHBOR,
+                           self.message.addr
+                           ).create_data(
+                               new_node=self.node.hostname,
+                               new_pub_key=self.node.conn.addr.pub_key)
+        await self.node.conn.write(self.peer_handler.writer, response.create_message(self.node.conn.addr), self.message.addr)
         print(f"Neighbors: {self.node.neighbors}!")
         
     async def handle_request_new_node(self):
-        # TODO: for max TOTAL_NUMBER_CONNECTIONS should be test
         """handle a new node for add to the network by finding new neighbors for it"""
         n_connections = int(self.message.data["n_connections"])
         self.message.data["passed_nodes"].append(self.node.hostname)
@@ -74,6 +80,7 @@ class ProcessingHandler:
             n_connections -= 1
             to_request_other.data["p2p_nodes"].append(f"{self.node.hostname}")
         # if still need new neighbors
+        new_nodes = set()
         if n_connections != 0:
             # prepare message to send other nodes for search
             new_request = to_request_other.copy()
@@ -92,6 +99,9 @@ class ProcessingHandler:
                     if response.status == False:
                         continue
                     n_connections = response.data["n_connections"]
+                    new_nodes |= set(response.data["p2p_nodes"])
+                    to_request_other.data["p2p_nodes"] = list(new_nodes)
+                    to_request_other.data["n_connections"] = n_connections
                 except ConnectionError:
                     # TODO: checking for connection that neighbor is online yet?
                     logging.error(f"Could not connect and send data to {addr}", exc_info=True)
@@ -100,7 +110,6 @@ class ProcessingHandler:
                 # We find all its neighbors
                 if n_connections == 0:
                     break
-
         # resolve connections if can not find Any neighbors for it
         # delete own neighbor then we have 2 free connections for neighbors
         if n_connections == TOTAL_NUMBER_CONNECTIONS and self.node.has_capacity_neighbors():
@@ -108,15 +117,16 @@ class ProcessingHandler:
                 request = Message(status=True,
                                   type_=ConnectionCode.NOT_NEIGHBOR,
                                   addr=addr
-                          ).create_data(node_key_pub=self.node.addr.pub_key)
-                response = await self.connect_and_send(addr, request.create_message(self.node.addr))
+                          ).create_data(node_hostname=self.node.hostname,
+                                        pub_key=self.node.conn.addr.pub_key)
+                response = await self.node.conn.connect_and_send(addr, request.create_message(self.node.conn.addr))
                 response = Message.from_str(response.decode())
-                if response['status'] == True:
+                if response.status == True:
                     self.node.delete_neighbor(addr)
                     logging.info(f"delete neighbor for {self.node.hostname} : {addr}")
-                    new_nodes = [f"{self.node.hostname}", f"{addr}"]
+                    new_nodes = [f"{self.node.hostname}", f"{addr.hostname}"]
                     to_request_other.data["p2p_nodes"] += new_nodes
-                    to_request_other.data['number_connections_requests'] -= 2
+                    to_request_other.data['n_connections'] -= 2
                     break
         # send the result
         final_request = Message(status=True,
@@ -136,14 +146,15 @@ class ProcessingHandler:
 
     async def handle_delete_neighbor(self):
         # TODO: send the result with nonblock
-        # TODO: test and debug
         response = Message(status=True,
                            type_=ConnectionCode.NOT_NEIGHBOR,
                            addr=self.message.addr).create_data(
                                node_hostname = self.node.hostname,
-                               pub_key = self.node.conn.pub_key
+                               pub_key = self.node.conn.addr.pub_key
                            )
-        if self.node.delete_neighbor(self.message.data["node_hostname"]):
+        addr = Addr.from_hostname(self.message.data["node_hostname"])
+        addr.pub_key = self.message.data["pub_key"]
+        if self.node.delete_neighbor(addr):
             logging.info(f"delete neighbor for {self.node.hostname}: {self.message.addr.hostname}")
         else:
             # TODO: make a error message
