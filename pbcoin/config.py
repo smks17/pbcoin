@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import (
     Any,
@@ -81,7 +82,11 @@ class Settings:
         self.glob = GlobalCfg()
         self.network =  NetworkCfg()
         self.logger = LoggerCfg()
-
+        if OS_TYPE == 'win':
+            # do not error when close task in windows
+            # TODO: maybe change close functions
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        
     def update(self, option: Dict[str, Any]):
         self.glob.update(option)
 
