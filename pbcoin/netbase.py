@@ -297,6 +297,8 @@ class Message:
                     "node_hostname": kwargs["node_hostname"],
                     "pub_key": kwargs["pub_key"]
                 }
+            elif self.type_ == ConnectionCode.PING:
+                self.data = None
         except KeyError as e:
             logging.error("Bad kwargs for creating message data", exec_info = True)
         return self

@@ -177,6 +177,10 @@ class ProcessingHandler:
     def handle_new_trx(self):
         raise NotImplementedError("This method is not implemented yet!")
 
-    def handle_ping(self):
-        raise NotImplementedError("This method is not implemented yet!")
-
+    async def handle_ping(self):
+        response = self.message.copy()
+        response.addr = self.node.addr
+        try:
+            await self.node.write(self.peer_handler.writer, response.create_message(self.node.addr), self.message.addr)
+        except ConnectionError:
+            pass  # TODO
