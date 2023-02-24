@@ -234,8 +234,8 @@ class Node:
         logging.debug('receive data: ' + data)
         try:
             data = json.loads(data)
-        #TODO: check that request is from neighbors or not
-        _type = data['type']
+            #TODO: check that request is from neighbors or not
+            _type = data['type']
         except:
             error_msg = json.dumps({
                 "status": False,
