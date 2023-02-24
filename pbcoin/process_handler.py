@@ -50,7 +50,6 @@ class ProcessingHandler:
         new_node_addr.pub_key = message.data["new_pub_key"]
         node.add_neighbor(new_node_addr)
         logging.info(f"New neighbor for {node.addr.hostname} : {new_node_addr.hostname}")
-        node.add_message_history(message)
         response = Message(True,
                            ConnectionCode.NEW_NEIGHBOR,
                            message.addr
@@ -157,7 +156,6 @@ class ProcessingHandler:
         else:
             # TODO: make a error message
             response.status = False
-        node.add_message_history(message)
         await node.write(peer.writer, response.create_message(node.addr), message.addr) 
         
     async def handle_mined_block(self, message: Message, peer: Peer, node: Node):

@@ -45,7 +45,7 @@ class Node(Connection):
         self.neighbors: Dict[str, Tuple[str, int]] = dict()
         self.connected: Dict[str, str] = dict()
         self.tasks = []  # save all tasks that process message
-        self.messages_history: Dict[str, Any] = dict()  # TODO: use kinda combination of OrderedSet & Queue
+        # TODO: use kinda combination of OrderedSet & Queue to store last message and in process_handler doesn't use direct write or read
         self.proc_handler = proc_handler
         
     async def handle_peer(self, reader: AsyncReader, writer: AsyncWriter):
@@ -113,9 +113,6 @@ class Node(Connection):
         
     def is_my_neighbor(self, addr: Addr) -> bool:
         return self.neighbors.get(addr.pub_key, None) is not None
-            
-    def add_message_history(self, message: Message):
-        self.messages_history[message.addr.pub_key] = message
 
     def allow_new_neighbor(self):
         return len(self.neighbors) < TOTAL_NUMBER_CONNECTIONS
