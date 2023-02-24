@@ -1,11 +1,11 @@
 import asyncio
-from concurrent.futures import ProcessPoolExecutor
 
 import pytest
 
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
 from pbcoin.netbase import Addr, ConnectionCode, Message
 from pbcoin.network import Node
+from pbcoin.process_handler import ProcessingHandler
 
 
 class TestNetworkBase:
@@ -27,7 +27,8 @@ class TestNetworkBase:
             addr = Addr(ip=f"{self.BASE_IP}.{i+1}",
                         port=self.PORT,
                         pub_key=f"0x2{i+1}")  # TODO: make a valid public key with Key class
-            node = Node(addr)
+            proc_handler = ProcessingHandler()
+            node = Node(addr, proc_handler)
             self.nodes.append(node)
         self.__class__.tasks = []
         for node in self.nodes:

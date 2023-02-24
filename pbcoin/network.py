@@ -6,14 +6,15 @@ import asyncio
 from copy import deepcopy
 import json
 import random
-from sys import argv
 from typing import (
     Any,
     Dict,
     Generator,
     Iterable,
     List,
-    Tuple
+    Optional,
+    Tuple,
+    TYPE_CHECKING
 )
 
 import pbcoin.config as conf
@@ -27,33 +28,36 @@ from pbcoin.netbase import (
     ConnectionCode,
     Errno,
     Message,
-    PeerHandler
+    Peer
 )
 from pbcoin.process_handler import ProcessingHandler
-
 
 logging = getLogger(__name__)
 
 
 class Node(Connection):
-    def __init__(self, addr: Addr, timeout: Optional[float] = None):
+    def __init__(self,
+                 addr: Addr,
+                 proc_handler: ProcessingHandler,
+                 timeout: Optional[float] = None):
         super().__init__(addr, timeout)
         self.is_listening = False
         self.neighbors: Dict[str, Tuple[str, int]] = dict()
         self.connected: Dict[str, str] = dict()
         self.tasks = []  # save all tasks that process message
         self.messages_history: Dict[str, Any] = dict()  # TODO: use kinda combination of OrderedSet & Queue
+        self.proc_handler = proc_handler
         
     async def handle_peer(self, reader: AsyncReader, writer: AsyncWriter):
         """ this is a callback method that
         handles requests data that receive from other nodes"""
-        peer_handler = PeerHandler(writer=writer, reader=reader)
-        data = await self.read(peer_handler.reader, peer_handler.addr)
+        peer = Peer(writer=writer, reader=reader)
+        data = await self.read(peer.reader, peer.addr)
         if data is None:
             raise Exception("Something wrong with read method and returns None")
         data = data.decode()
         if data == "":
-            logging.warning(f"Get a empty data from {peer_handler.addr}")
+            logging.warning(f"Get a empty data from {peer.addr}")
             return
         logging.debug('receive data: ' + data)
         message = None
@@ -62,17 +66,14 @@ class Node(Connection):
             message = Message.from_str(data)
         except Exception as e:
             #TODO: Create error message
-            logging.debug(f"Bad message from {peer_handler.addr}")
+            logging.debug(f"Bad message from {peer.addr}")
             return
-        peer_handler.addr = message.addr  # TODO: maybe it's better right check for pub_key 
-        proc_handler = ProcessingHandler(message=message,
-                                         node=self,
-                                         peer_handler=peer_handler)
+        peer.addr = message.addr  # TODO: maybe it's better right check for pub_key 
         if not conf.settings.glob.debug:
-            self.tasks.append(asyncio.create_task(proc_handler.handle()))
+            self.tasks.append(asyncio.create_task(self.proc_handler.handle(message, peer, self)))
         else:
             #! TODO: just uses for debug and should be deleted after implementing handler
-            task = asyncio.create_task(proc_handler.handle())
+            task = asyncio.create_task(self.proc_handler.handle(message, peer, self))
             await task
 
     async def listen(self):

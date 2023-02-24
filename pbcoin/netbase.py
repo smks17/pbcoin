@@ -81,13 +81,13 @@ class Connection:
             self.addr = Addr(ip=conf.settings.network.ip, port=conf.settings.network.port, pub_key=None)
         self.timeout = timeout
     
-    async def connect_to(self, src_addr: Addr) -> PeerHandler:
+    async def connect_to(self, src_addr: Addr) -> Peer:
         """make a connection to destination addr and return stream reader and writer"""
         try:
             fut = asyncio.open_connection(src_addr.ip, src_addr.port)
             logging.debug(f"from {self.addr.hostname} Connect to {src_addr.hostname}")
             reader, writer = await asyncio.wait_for(fut, timeout=self.timeout)
-            peer_handler = PeerHandler(addr=src_addr,
+            peer = Peer(addr=src_addr,
                                     writer=writer,
                                     reader=reader,
                                     is_connected=True)
@@ -100,7 +100,7 @@ class Connection:
         except Exception as e:
             logging.error(f"Error", exc_info=True)
             return None
-        return peer_handler
+        return peer
 
     async def connect_and_send(self,
                                src_addr: Addr,
@@ -111,16 +111,16 @@ class Connection:
         is True wait to recieve data from destination and return data"""
         rec_data = b''
         # try to connect
-        peer_handler = await self.connect_to(src_addr)
-        if peer_handler is None:
+        peer = await self.connect_to(src_addr)
+        if peer is None:
             return None
         # write the data
-        err = await self.write(peer_handler.writer, data, peer_handler.addr)
+        err = await self.write(peer.writer, data, peer.addr)
         if err is not None:
             return None
         # get the message
         if wait_for_receive:
-            rec_data = await self.read(peer_handler.reader, peer_handler.addr)
+            rec_data = await self.read(peer.reader, peer.addr)
             if rec_data is None:
                 return None
             logging.debug(
@@ -130,8 +130,8 @@ class Connection:
 
     async def disconnected_from(self, addr: Addr, wait_to_close=True):
         # TODO: I think this method is not unnecessary
-        peer_handler = self.connected.pop(addr.hostname)
-        peer_handler.disconnect(wait_to_close)
+        peer = self.connected.pop(addr.hostname)
+        peer.disconnect(wait_to_close)
 
     async def write(self,
                     writer: AsyncWriter,
@@ -190,7 +190,7 @@ class Connection:
 
 
 @dataclass
-class PeerHandler:
+class Peer:
     addr: Addr
     writer: Optional[AsyncWriter]
     reader: Optional[AsyncReader]
