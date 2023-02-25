@@ -2,18 +2,21 @@ import asyncio
 
 import pytest
 
+from pbcoin.block import Block
+from pbcoin.blockchain import BlockChain
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
+from pbcoin.mempool import Mempool
+from pbcoin.mine import Mine
 from pbcoin.netbase import Addr, ConnectionCode, Message
 from pbcoin.network import Node
 from pbcoin.process_handler import ProcessingHandler
-
+from pbcoin.wallet import Wallet
 
 class TestNetworkBase:
     BASE_IP = '127.0.0'
     SENDER_IP = f'{BASE_IP}.1'
     RECEIVER_IP = f'{BASE_IP}.2'
     PORT = 8989
-    MAX_WORKERS = 6
 
     @pytest.fixture
     async def run_nodes(self, request):
@@ -27,8 +30,11 @@ class TestNetworkBase:
             addr = Addr(ip=f"{self.BASE_IP}.{i+1}",
                         port=self.PORT,
                         pub_key=f"0x2{i+1}")  # TODO: make a valid public key with Key class
-            proc_handler = ProcessingHandler()
-            node = Node(addr, proc_handler)
+            blockchain = BlockChain([])
+            unspent_coins = dict()
+            wallet = Wallet()
+            proc_handler = ProcessingHandler(blockchain, unspent_coins, wallet)
+            node = Node(addr, proc_handler, 1)
             self.nodes.append(node)
         self.__class__.tasks = []
         for node in self.nodes:
@@ -36,6 +42,9 @@ class TestNetworkBase:
             self.tasks.append(task)
             if node.addr.ip == self.SENDER_IP:
                 continue
+            #! TODO: find a better way
+            #! just use for waiting process message by receiver and then check out things
+            await asyncio.sleep(0.4)
             await node.start_up([f"{self.SENDER_IP}:{self.PORT}"], False)
         
         def close_nodes():
@@ -104,3 +113,41 @@ class TestMakeConnection(TestNetworkBase):
             assert len(node.neighbors) == actual_len_neighbors, f"{node.addr.hostname}"
             # TODO: better check neighbors when neighbors is more than TOTAL_NUMBER_CONNECTIONS
             assert node.neighbors.items() <= actual_neighbors(node.addr).items()
+
+class TestHandlerMessage(TestNetworkBase):
+    @pytest.fixture(scope="class", autouse=True)
+    def set_difficulty(self):
+        import pbcoin.config as conf
+        conf.settings.update({"difficulty": (2 ** 512 - 1) >> (2)})
+    
+    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    async def test_handling_mined_block(self, run_nodes):
+        new_block = Block("", 1)
+        mem = Mempool()
+        sender = self.nodes[0]
+        receiver = self.nodes[1]
+        miner = Mine(sender.proc_handler.blockchain, sender.proc_handler.wallet, mem)
+        await miner.mine(setup_block=new_block, send_network=False)
+        await sender.send_mined_block(new_block)
+        #! TODO: find a better way ()
+        #! just use for waiting process message by receiver and then check out things
+        await asyncio.sleep(0.2)
+        # assertions
+        assert receiver.proc_handler.blockchain.height == 1, "Didn't received mined block"
+        assert receiver.proc_handler.blockchain.last_block == new_block, "Received block is not same with mined block"
+
+    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    async def test_handling_bad_mined_block(self, run_nodes):
+        new_block = Block("Bluh", 1)
+        mem = Mempool()
+        sender = self.nodes[0]
+        receiver = self.nodes[1]
+        miner = Mine(sender.proc_handler.blockchain, sender.proc_handler.wallet, mem)
+        await miner.mine(setup_block=new_block, send_network=False)
+        await sender.send_mined_block(new_block)
+        await sender.send_mined_block(new_block)
+        #! TODO: find a better way ()
+        #! just use for waiting process message by receiver and then check out things
+        await asyncio.sleep(0.2)
+        # assertion
+        assert receiver.proc_handler.blockchain.height == 0, "it received bad mined block"
