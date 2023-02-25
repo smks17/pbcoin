@@ -297,6 +297,8 @@ class Message:
                     "node_hostname": kwargs["node_hostname"],
                     "pub_key": kwargs["pub_key"]
                 }
+            elif self.type_ == ConnectionCode.MINED_BLOCK:
+                self.data = {"block": kwargs["block"]}
             elif self.type_ == ConnectionCode.PING:
                 self.data = None
         except KeyError as e:

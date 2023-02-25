@@ -1,20 +1,27 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from copy import deepcopy
+from typing import TYPE_CHECKING, Dict
 
+from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
 from pbcoin.netbase import Addr, ConnectionCode, Message, Peer
 from pbcoin.logger import getLogger
 if TYPE_CHECKING:
+    from pbcoin.blockchain import BlockChain
+    from pbcoin.trx import Coin
     from pbcoin.network import Node
+    from pbcoin.wallet import Wallet
 
 logging = getLogger(__name__)
 
 
 class ProcessingHandler:
-    def __init__(self):
-        pass
-    
+    def __init__(self, blockchain: BlockChain, unspent_coins: Dict[str, Coin], wallet: Wallet):
+        self.blockchain = blockchain
+        self.unspent_coins = unspent_coins
+        self.wallet = wallet
+        
     async def handle(self, *args) -> bool:
         message = args[0]
         # TODO: Check the structure of message data is correct or not 
@@ -57,7 +64,6 @@ class ProcessingHandler:
                                new_node=node.addr.hostname,
                                new_pub_key=node.addr.pub_key)
         await node.write(peer.writer, response.create_message(node.addr), message.addr)
-        print(f"Neighbors: {node.neighbors}!")
         
     async def handle_request_new_node(self, message: Message, peer: Peer, node: Node):
         """handle a new node for add to the network by finding new neighbors for it"""
@@ -159,7 +165,33 @@ class ProcessingHandler:
         await node.write(peer.writer, response.create_message(node.addr), message.addr) 
         
     async def handle_mined_block(self, message: Message, peer: Peer, node: Node):
-        raise NotImplementedError("This method is not implemented yet!")
+        """handle for request finder new block"""
+        block_data = message.data
+        logging.debug(f"Mine block from {message.addr.hostname}: {block_data}")
+        block = Block.from_json_data_full(block_data['block'])
+        # checking which blockchain is longer, own or its?
+        if block.block_height > self.blockchain.height:
+            number_new_blocks = block.block_height - self.blockchain.height
+            if number_new_blocks == 1:
+                # just this block is new
+                done = self.blockchain.add_new_block(block, self.unspent_coins)
+                if done != BlockValidationLevel.ALL():
+                    # TODO: send why receive data is a bad request
+                    logging.error(f"Bad request mined block from {message.addr.hostname} validation: {done}")
+                else:
+                    last = self.blockchain.last_block
+                    last.update_outputs(self.unspent_coins)
+                    self.wallet.updateBalance(deepcopy(last.transactions))
+                    logging.info(f"New mined block from {message.addr.hostname}")
+                    logging.debug(
+                        f"info mined block from {message.addr.hostname}: {block.get_data()}")
+            else:
+                # TODO: request for get n block before this block for add to its blockchain and resolve
+                pass
+        else:
+            # TODO: current blockchain is longer so declare other for resolve that
+            logging.error("Not implemented resolve shorter blockchain")
+        logging.debug(f"new block chian: {self.blockchain.get_hashes()}")
         
     def handle_resolve_blockchain(self, message: Message, peer: Peer, node: Node):
         raise NotImplementedError("This method is not implemented yet!")

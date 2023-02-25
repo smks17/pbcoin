@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
-import json
 import random
 from typing import (
     Any,
@@ -17,6 +16,7 @@ from typing import (
     TYPE_CHECKING
 )
 
+from pbcoin.block import Block
 import pbcoin.config as conf
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
 from pbcoin.logger import getLogger
@@ -175,3 +175,13 @@ class Node(Connection):
                 # get block chain from other nodes
                 #TODO: resolve blockchain
                 raise NotImplementedError("Not implemented get block and blockchain yet!")
+
+    async def send_mined_block(self, block: Block):
+        """declare other nodes for find new block"""
+        message = Message(True,
+                          ConnectionCode.MINED_BLOCK,
+                          self.addr,
+                          {"block": block.get_data()})
+        for pub_key in self.neighbors:
+            dst_addr = self.neighbors[pub_key]
+            await self.connect_and_send(dst_addr, message.create_message(dst_addr), False)
