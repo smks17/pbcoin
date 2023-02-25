@@ -176,9 +176,11 @@ class Block:
         self,
         unspent_coins: Dict[str, Coin],
         pre_hash = "",
-        difficulty = conf.settings.glob.difficulty  # almost for unittest
+        difficulty = None  # almost for unittest
     ) -> BlockValidationLevel:
         """checking validation and return validation level"""
+        if difficulty is None:
+            difficulty = conf.settings.glob.difficulty
         valid = BlockValidationLevel.Bad
 
         # difficulty level

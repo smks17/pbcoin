@@ -53,8 +53,10 @@ class BlockChain:
         block_: Block,
         unspent_coins: Optional[Dict[str, Coin]]=None,
         ignore_validation=False,
-        difficulty: int = conf.settings.glob.difficulty  # almost just for unittest
+        difficulty: int = None  # almost just for unittest
     ) -> Optional[BlockValidationLevel]:
+        if difficulty is None:
+            difficulty = conf.settings.glob.difficulty
         if not ignore_validation:
             validation = block_.is_valid_block(
                 unspent_coins, pre_hash=self.last_block_hash, difficulty=difficulty)
@@ -70,7 +72,7 @@ class BlockChain:
         self,
         new_blocks: List[Block],
         unspent_coins: Dict[str, Coin],
-        difficulty: int = conf.settings.glob.difficulty  # almost for unittest
+        difficulty = None  # almost for unittest
     ) -> Tuple[bool, Optional[int]]:
         """resolve the this blockchain with new blocks
 
@@ -90,6 +92,8 @@ class BlockChain:
             and the second one is the index of block in new_blocks that has a problem, if
             it resolves with no problem, the second one is None
         """
+        if difficulty is None:
+            difficulty = conf.settings.glob.difficulty
         copy_unspent_coins = copy(unspent_coins)
         result = BlockChain.check_blockchain(
             new_blocks, copy_unspent_coins, difficulty)
@@ -166,8 +170,10 @@ class BlockChain:
     def check_blockchain(
         blocks: List[Block],
         unspent_coins: Dict[str, Coin],
-        difficulty = conf.settings.glob.difficulty  # almost just for unittest
+        difficulty = None  # almost just for unittest
     ) -> Tuple[bool, Optional[int]]:
+        if difficulty is None:
+            difficulty = conf.settings.glob.difficulty
         for index, block in enumerate(blocks):
             pre_hash = ""
             if index != 0:

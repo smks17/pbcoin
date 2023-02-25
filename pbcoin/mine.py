@@ -58,8 +58,8 @@ class Mine:
         self,
         setup_block: Optional[Block] = None,
         add_block = True,
-        difficulty: int = conf.settings.glob.difficulty, # almost just for unittest
-        send_network = conf.settings.glob.network
+        difficulty: Optional[int] = None,  # almost just for unittest
+        send_network: Optional[bool] = None  # almost just for unittest
     ) -> None:
         """Start mining for new block and send to other nodes
         from network if it is setup
@@ -75,6 +75,11 @@ class Mine:
         difficulty: int
             mine for what difficulty
         """
+        if difficulty is None:
+            difficulty = conf.settings.glob.difficulty
+        if send_network is None:
+            send_network = conf.settings.glob.network
+
         if setup_block is not None:
             self.setup_block = setup_block
         elif type(self.blockchain) is BlockChain:
