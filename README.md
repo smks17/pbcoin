@@ -97,3 +97,4 @@ and coin contains:
 - [ ] separate wallet and node
 - [ ] database
 - [ ] modular
+- [ ] add test mode for unittests
