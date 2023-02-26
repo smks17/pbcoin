@@ -180,8 +180,11 @@ class Node(Connection):
         """declare other nodes for find new block"""
         message = Message(True,
                           ConnectionCode.MINED_BLOCK,
-                          self.addr,
+                          None,
                           {"block": block.get_data()})
         for pub_key in self.neighbors:
             dst_addr = self.neighbors[pub_key]
-            await self.connect_and_send(dst_addr, message.create_message(dst_addr), False)
+            message.addr = dst_addr
+            await self.connect_and_send(dst_addr,
+                                        message.create_message(self.addr),
+                                        False)
