@@ -239,7 +239,7 @@ class Message:
         base_data = {
             "status": self.status,
             "type": self.type_,
-            "src_addr": self.addr.hostname,
+            "dst_addr": self.addr.hostname,
             "src_addr": my_addr.hostname,
             "pub_key": my_addr.pub_key,
             "data": self.data
