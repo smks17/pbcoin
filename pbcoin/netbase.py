@@ -299,6 +299,14 @@ class Message:
                 }
             elif self.type_ == ConnectionCode.MINED_BLOCK:
                 self.data = {"block": kwargs["block"]}
+            elif self.type_ == ConnectionCode.GET_BLOCKS:
+                hash_block = kwargs.get("hash_block", None)
+                if hash_block is not None:
+                    self.data = {"hash_block": hash_block}
+                else:
+                    self.data = {"first_index": kwargs["first_index"]}
+            elif self.type_ == ConnectionCode.SEND_BLOCKS:
+                self.data = {"blocks": kwargs["blocks"]}
             elif self.type_ == ConnectionCode.PING:
                 self.data = None
         except KeyError as e:

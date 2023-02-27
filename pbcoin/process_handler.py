@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from copy import deepcopy
-from typing import TYPE_CHECKING, Dict
+from copy import copy, deepcopy
+from typing import TYPE_CHECKING, Dict, Optional
 
 from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
@@ -200,8 +200,30 @@ class ProcessingHandler:
         if not result[0]:
             pass  # TODO: should tell other nodes that blocks have problem
 
-    def handle_get_blocks(self, message: Message, peer: Peer, node: Node):
-        raise NotImplementedError("This method is not implemented yet!")
+    async def handle_get_blocks(self, message: Message, peer: Peer, node: Node):
+        """handle for request another node for getting block"""
+        copy_blockchain = copy(self.blockchain)
+        first_index: Optional[int] = None
+        hash_block = message.data.get('hash_block', None)
+        if hash_block:
+            first_index = copy_blockchain.search(hash_block)
+        else:
+            first_index = message.data.pop('first_index', None)
+        request = None
+        if first_index == None:
+            # doesn't have this specific chain or block(s)
+            # TODO: maybe it's good to get from a full node
+            logging.debug("doesn't have self chain!")
+            # TODO: report with error code
+            request = Message(False,
+                              ConnectionCode.SEND_BLOCKS,
+                              message.addr)
+        else:
+            blocks = copy_blockchain.get_data(first_index)
+            request = Message(True,
+                              ConnectionCode.SEND_BLOCKS,
+                              message.addr).create_data(blocks=blocks)
+        await node.write(peer.writer, request.create_message(node.addr), False)
 
     def handle_send_blocks(self, message: Message, peer: Peer, node: Node):
         raise NotImplementedError("This method is not implemented yet!")
