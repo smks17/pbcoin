@@ -151,3 +151,31 @@ class TestHandlerMessage(TestNetworkBase):
         await asyncio.sleep(0.2)
         # assertion
         assert receiver.proc_handler.blockchain.height == 0, "it received bad mined block"
+
+    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    async def test_resolving_blockchain(self, run_nodes):
+        mem = Mempool()
+        sender = self.nodes[0]
+        receiver = self.nodes[1]
+        new_block = Block("", 1)
+        sender_miner = Mine(sender.proc_handler.blockchain,
+                            sender.proc_handler.wallet, mem)
+        receiver_miner = Mine(receiver.proc_handler.blockchain,
+                              receiver.proc_handler.wallet, mem)
+        await sender_miner.mine(setup_block=new_block, send_network=False)
+        await receiver_miner.mine(setup_block=new_block, send_network=False)
+        odd_block = Block(new_block.__hash__, 2)
+        await sender_miner.mine(setup_block=odd_block, send_network=False)
+        last_two_blocks = sender_miner.blockchain.get_last_blocks(2)
+        message = Message(True,
+                    ConnectionCode.MINED_BLOCK,
+                    receiver.addr,
+                    {"block": [block.get_data() for block in last_two_blocks]})
+        await sender.connect_and_send(receiver.addr,
+                                      message.create_message(sender.addr),
+                                      False)
+        # assertions
+        assert(receiver.proc_handler.blockchain.height == 2,
+               "Didn't received new block or didn't resolve new blockchain")
+        assert(receiver.proc_handler.blockchain.last_block == odd_block,
+               "Last Resolved block is not same with mined block")
