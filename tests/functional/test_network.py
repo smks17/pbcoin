@@ -179,3 +179,112 @@ class TestHandlerMessage(TestNetworkBase):
                "Didn't received new block or didn't resolve new blockchain")
         assert(receiver.proc_handler.blockchain.last_block == odd_block,
                "Last Resolved block is not same with mined block")
+
+    # TODO: Clean up
+    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    async def test_get_blocks_with_hash(self, run_nodes):
+        mem = Mempool()
+        sender = self.nodes[0]  # send the blocks
+        receiver = self.nodes[1]  # receive the blocks
+        new_block = Block("", 1)
+        sender_miner = Mine(sender.proc_handler.blockchain,
+                            sender.proc_handler.wallet, mem)
+        await sender_miner.mine(setup_block=new_block, send_network=False)
+        new_block = Block(new_block.__hash__, 2)
+        await sender_miner.mine(setup_block=new_block, send_network=False)
+        first_blocks = sender_miner.blockchain.get_last_blocks(2)[0]
+        message = Message(True,
+                    ConnectionCode.GET_BLOCKS,
+                    sender.addr,
+                    {"hash_block": first_blocks.__hash__})
+        response = await sender.connect_and_send(sender.addr,
+                                      message.create_message(receiver.addr),
+                                      True)
+        response = Message.from_str(response.decode())
+        # assertions
+        assert ((response.status == True
+                 and response.type_ == ConnectionCode.SEND_BLOCKS),
+                "Doesn't send proper message prototype")
+        response_blocks = [Block.from_json_data_full(block)
+                           for block in response.data["blocks"]]
+        assert(sender_miner.blockchain.get_last_blocks(2) == response_blocks,
+               "Didn't received correct blocks")
+
+    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    async def test_get_blocks_with_bad_hash(self, run_nodes):
+        mem = Mempool()
+        sender = self.nodes[0]  # send the blocks
+        receiver = self.nodes[1]  # receive the blocks
+        new_block = Block("", 1)
+        sender_miner = Mine(sender.proc_handler.blockchain,
+                            sender.proc_handler.wallet, mem)
+        await sender_miner.mine(setup_block=new_block, send_network=False)
+        new_block = Block(new_block.__hash__, 2)
+        await sender_miner.mine(setup_block=new_block, send_network=False)
+        first_blocks = sender_miner.blockchain.get_last_blocks(2)[0]
+        message = Message(True,
+                    ConnectionCode.GET_BLOCKS,
+                    sender.addr,
+                    {"hash_block": "Bluh"})
+        response = await sender.connect_and_send(sender.addr,
+                                      message.create_message(receiver.addr),
+                                      True)
+        response = Message.from_str(response.decode())
+        # assertions
+        assert ((response.status == False
+                 and response.type_ == ConnectionCode.SEND_BLOCKS),
+                "Sends the blocks for bad hash")
+
+    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    async def test_get_blocks_with_index(self, run_nodes):
+        mem = Mempool()
+        sender = self.nodes[0]  # send the blocks
+        receiver = self.nodes[1]  # receive the blocks
+        new_block = Block("", 1)
+        sender_miner = Mine(sender.proc_handler.blockchain,
+                            sender.proc_handler.wallet, mem)
+        await sender_miner.mine(setup_block=new_block, send_network=False)
+        new_block = Block(new_block.__hash__, 2)
+        await sender_miner.mine(setup_block=new_block, send_network=False)
+        first_blocks = sender_miner.blockchain.get_last_blocks(2)[0]
+        message = Message(True,
+                    ConnectionCode.GET_BLOCKS,
+                    sender.addr,
+                    {"first_index": 0})
+        response = await sender.connect_and_send(sender.addr,
+                                      message.create_message(receiver.addr),
+                                      True)
+        response = Message.from_str(response.decode())
+        # assertions
+        assert ((response.status == True
+                 and response.type_ == ConnectionCode.SEND_BLOCKS),
+                "Doesn't send proper message prototype")
+        response_blocks = [Block.from_json_data_full(block)
+                           for block in response.data["blocks"]]
+        assert(sender_miner.blockchain.get_last_blocks(2) == response_blocks,
+               "Didn't received correct blocks")
+
+    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    async def test_get_blocks_with_index(self, run_nodes):
+        mem = Mempool()
+        sender = self.nodes[0]  # send the blocks
+        receiver = self.nodes[1]  # receive the blocks
+        new_block = Block("", 1)
+        sender_miner = Mine(sender.proc_handler.blockchain,
+                            sender.proc_handler.wallet, mem)
+        await sender_miner.mine(setup_block=new_block, send_network=False)
+        new_block = Block(new_block.__hash__, 2)
+        await sender_miner.mine(setup_block=new_block, send_network=False)
+        first_blocks = sender_miner.blockchain.get_last_blocks(2)[0]
+        message = Message(True,
+                    ConnectionCode.GET_BLOCKS,
+                    sender.addr,
+                    {"first_index": 1000})
+        response = await sender.connect_and_send(sender.addr,
+                                      message.create_message(receiver.addr),
+                                      True)
+        response = Message.from_str(response.decode())
+        # assertions
+        assert ((response.status == False
+                 and response.type_ == ConnectionCode.SEND_BLOCKS),
+                "Sends the blocks for bad index")
