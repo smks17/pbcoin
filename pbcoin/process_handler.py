@@ -194,7 +194,11 @@ class ProcessingHandler:
         logging.debug(f"new block chian: {self.blockchain.get_hashes()}")
         
     def handle_resolve_blockchain(self, message: Message, peer: Peer, node: Node):
-        raise NotImplementedError("This method is not implemented yet!")
+        blocks = message.data['blocks']
+        blocks = [Block.from_json_data_full(block) for block in blocks]
+        result = self.blockchain.resolve(blocks, self.unspent_coins)
+        if not result[0]:
+            pass  # TODO: should tell other nodes that blocks have problem
 
     def handle_get_blocks(self, message: Message, peer: Peer, node: Node):
         raise NotImplementedError("This method is not implemented yet!")
