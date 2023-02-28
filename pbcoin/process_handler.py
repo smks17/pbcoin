@@ -210,7 +210,7 @@ class ProcessingHandler:
         else:
             first_index = message.data.pop('first_index', None)
         request = None
-        if first_index == None:
+        if first_index == None or first_index > self.blockchain.height:
             # doesn't have this specific chain or block(s)
             # TODO: maybe it's good to get from a full node
             logging.debug("doesn't have self chain!")
