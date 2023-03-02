@@ -309,6 +309,11 @@ class Message:
                     self.data = {"first_index": kwargs["first_index"]}
             elif self.type_ == ConnectionCode.SEND_BLOCKS:
                 self.data = {"blocks": kwargs["blocks"]}
+            elif self.type_ == ConnectionCode.ADD_TRX:
+                self.data = {"trx": kwargs["trx"],
+                             "signature": kwargs["signature"],
+                             "public_key": kwargs["public_key"],
+                             "passed_nodes": kwargs["passed_nodes"]}
             elif self.type_ == ConnectionCode.PING:
                 self.data = None
         except KeyError as e:

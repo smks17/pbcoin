@@ -3,13 +3,17 @@ from __future__ import annotations
 from copy import copy, deepcopy
 from typing import TYPE_CHECKING, Dict, Optional
 
+from ellipticcurve.publicKey import PublicKey
+from ellipticcurve.signature import Signature
+
 from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
 from pbcoin.netbase import Addr, ConnectionCode, Message, Peer
 from pbcoin.logger import getLogger
+from pbcoin.trx import Coin, Trx
 if TYPE_CHECKING:
     from pbcoin.blockchain import BlockChain
-    from pbcoin.trx import Coin
+    from pbcoin.mempool import Mempool
     from pbcoin.network import Node
     from pbcoin.wallet import Wallet
 
@@ -17,10 +21,11 @@ logging = getLogger(__name__)
 
 
 class ProcessingHandler:
-    def __init__(self, blockchain: BlockChain, unspent_coins: Dict[str, Coin], wallet: Wallet):
+    def __init__(self, blockchain: BlockChain, unspent_coins: Dict[str, Coin], wallet: Wallet, mempool: Mempool):
         self.blockchain = blockchain
         self.unspent_coins = unspent_coins
         self.wallet = wallet
+        self.mempool = mempool
         
     async def handle(self, *args) -> bool:
         message = args[0]
@@ -228,8 +233,46 @@ class ProcessingHandler:
     def handle_send_blocks(self, message: Message, peer: Peer, node: Node):
         raise NotImplementedError("This method is not implemented yet!")
 
-    def handle_new_trx(self, message: Message, peer: Peer, node: Node):
-        raise NotImplementedError("This method is not implemented yet!")
+    async def handle_new_trx(self, message: Message, peer: Peer, node: Node):
+        message.data['passed_nodes'].append(node.addr.hostname)
+        pubKey = PublicKey.fromString(message.data['public_key'])
+        sig = Signature.fromBase64(message.data['signature'].encode())
+        trx_data = message.data['trx']
+        trx_inputs = trx_data['inputs']
+        trx_outputs = trx_data['outputs']
+        inputs = []
+        outputs = []
+        # make trx from receive data
+        for in_coin in trx_inputs:
+            inputs.append(Coin(in_coin["owner"],
+                               in_coin["index"],
+                               in_coin["trx_hash"],
+                               in_coin["value"]))
+        for out_coin in trx_outputs:
+            outputs.append(Coin(out_coin["owner"],
+                                out_coin["index"],
+                                out_coin["trx_hash"],
+                                out_coin["value"]))
+        time = trx_data['time']
+        new_trx = Trx(self.blockchain.height,
+                      self.wallet.public_key,
+                      inputs, outputs, time)
+        # add to mempool and send other nodes
+        result = self.mempool.add_new_transaction(new_trx,
+                                                  sig,
+                                                  self.blockchain.last_block,
+                                                  pubKey,
+                                                  self.unspent_coins)
+        if result:
+            for pub_key in node.neighbors:
+                dst_addr = node.neighbors[pub_key]
+                if not dst_addr.hostname in message.data['passed_nodes']:
+                    copy_msg = message.copy
+                    copy_msg.src_addr = self.node.addr
+                    copy_msg.dst_addr = dst_addr
+                    await self.connect_and_send(dst_addr, copy_msg.create_message(self.addr), False)
+        else:
+            pass  # TODO
 
     async def handle_ping(self, message: Message, peer: Peer, node: Node):
         response = message.copy()

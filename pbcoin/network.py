@@ -31,6 +31,9 @@ from pbcoin.netbase import (
     Peer
 )
 from pbcoin.process_handler import ProcessingHandler
+if TYPE_CHECKING:
+    from pbcoin.trx import Trx
+    from pbcoin.wallet import Wallet
 
 logging = getLogger(__name__)
 
@@ -182,6 +185,21 @@ class Node(Connection):
                           ConnectionCode.MINED_BLOCK,
                           None,
                           {"block": block.get_data()})
+        for pub_key in self.neighbors:
+            dst_addr = self.neighbors[pub_key]
+            message.addr = dst_addr
+            await self.connect_and_send(dst_addr,
+                                        message.create_message(self.addr),
+                                        False)
+
+    async def send_new_trx(self, trx: Trx, wallet: Wallet):
+        """declare other neighbors new transaction for adding to mempool"""
+        message = Message(True,
+                      ConnectionCode.ADD_TRX,
+                      None).create_data(trx = trx.get_data(with_hash=True),
+                                        signature = wallet.base64Sign(trx),
+                                        public_key = wallet.public_key,
+                                        passed_nodes = [self.addr.hostname])
         for pub_key in self.neighbors:
             dst_addr = self.neighbors[pub_key]
             message.addr = dst_addr
