@@ -1,4 +1,5 @@
 import asyncio
+from copy import deepcopy
 
 import pytest
 
@@ -10,6 +11,7 @@ from pbcoin.mine import Mine
 from pbcoin.netbase import Addr, ConnectionCode, Message
 from pbcoin.network import Node
 from pbcoin.process_handler import ProcessingHandler
+from pbcoin.trx import Trx
 from pbcoin.wallet import Wallet
 
 class TestNetworkBase:
@@ -33,7 +35,8 @@ class TestNetworkBase:
             blockchain = BlockChain([])
             unspent_coins = dict()
             wallet = Wallet()
-            proc_handler = ProcessingHandler(blockchain, unspent_coins, wallet)
+            mempool = Mempool()
+            proc_handler = ProcessingHandler(blockchain, unspent_coins, wallet, mempool)
             node = Node(addr, proc_handler, 1)
             self.nodes.append(node)
         self.__class__.tasks = []
@@ -122,7 +125,7 @@ class TestHandlerMessage(TestNetworkBase):
 
     @pytest.fixture
     def mine_some_blocks(self):
-        async def iner(n_mine, node: Node, send_mined_block=False):
+        async def iner(n_mine, node: Node, send_mined_block=False, subsidies=None):
             miner = Mine(node.proc_handler.blockchain,
                          node.proc_handler.wallet,
                          Mempool())
@@ -131,7 +134,10 @@ class TestHandlerMessage(TestNetworkBase):
                 pre_hash = ""
                 if n != 0:
                     pre_hash = blocks[-1].__hash__
-                new_block = Block(pre_hash, n+1)
+                if subsidies is not None and len(subsidies) > n:
+                    new_block = Block(pre_hash, n+1, subsidies[n])
+                else:
+                    new_block = Block(pre_hash, n+1)
                 await miner.mine(setup_block=new_block,
                                  send_network=False)
                 if send_mined_block:
@@ -267,3 +273,29 @@ class TestHandlerMessage(TestNetworkBase):
         assert response.status == False \
                and response.type_ == ConnectionCode.SEND_BLOCKS, \
                "Sends the blocks for bad index"
+    
+    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    async def test_handling_new_trx(self, run_nodes, mine_some_blocks):
+        sender = self.nodes[0]
+        receiver = self.nodes[1]
+        wallet = sender.proc_handler.wallet
+        blockchain = sender.proc_handler.blockchain
+        subsidy = Trx(blockchain.height, wallet.public_key)
+        await mine_some_blocks(1, sender, True, [subsidy])
+        wallet.updateBalance(deepcopy(blockchain.last_block.transactions))
+        value = 25
+        new_trx = None
+        if value <= wallet.n_amount:
+            new_trx = Trx.make_trx(sum(list(wallet.out_coins.values()), []),
+                                        wallet.public_key, receiver.addr.pub_key, 25)
+            result = sender.proc_handler.mempool.add_new_transaction(new_trx,
+                                                                     wallet.sign(new_trx),
+                                                                     blockchain.last_block,
+                                                                     wallet.walletKey.publicKey(),
+                                                                     sender.proc_handler.unspent_coins)
+            assert result
+            await sender.send_new_trx(new_trx, wallet)
+        await asyncio.sleep(0.2)
+        assert receiver.proc_handler.mempool.is_exist(new_trx.hash_trx),  \
+                "Didn't received new trx in mempool"
+
