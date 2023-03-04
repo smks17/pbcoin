@@ -139,8 +139,11 @@ class Node(Connection):
     def close(self):
         """close listening and close all handler tasks"""
         if self.is_listening:
-            self.server.close()
-            self.is_listening = False
+            try:
+                self.server.close()
+                self.is_listening = False
+            except asyncio.CancelledError:
+                pass
 
     async def start_up(self, seeds: List[str], get_blockchain = True):
         """begin to find new neighbors and connect to the blockchain network"""
