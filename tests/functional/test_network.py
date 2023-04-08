@@ -147,6 +147,18 @@ class TestHandlerMessage(TestNetworkBase):
         assert receiver.proc_handler.blockchain.last_block == blocks[-1],  \
                 "Received block is not same with mined block"
 
+    @pytest.mark.parametrize("run_nodes", [(2, True)], ids=["two nodes"], indirect=True)
+    async def test_handling_misplace_mined_block(self, run_nodes, mine_some_blocks):
+        sender = self.nodes[0]
+        blocks = await mine_some_blocks(2, sender, False)
+        receiver = self.nodes[1]
+        await sender.send_mined_block(blocks[-1])
+        # assertions
+        assert receiver.proc_handler.blockchain.height == 2,  \
+                "Didn't received mined block"
+        assert receiver.proc_handler.blockchain.blocks == blocks,  \
+                "Received block is not same with mined block"
+
     @pytest.mark.parametrize("run_nodes", [(2, False)], ids=["two nodes"], indirect=True)
     async def test_handling_bad_mined_block(self, run_nodes, mine_some_blocks):
         sender = self.nodes[0]
