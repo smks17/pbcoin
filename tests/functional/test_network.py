@@ -47,9 +47,6 @@ class TestNetworkBase:
             self.tasks.append(task)
             if not neighbor_finding or node.addr.ip == self.SENDER_IP:
                 continue
-            #! TODO: find a better way
-            #! just use for waiting process message by receiver and then check out things
-            await asyncio.sleep(0.4)
             await node.start_up([f"{self.SENDER_IP}:{self.PORT}"], False)
         
         def close_nodes():

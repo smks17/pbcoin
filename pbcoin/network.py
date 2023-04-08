@@ -174,13 +174,13 @@ class Node(Connection):
             # TODO: Get the ok message without waiting
             response = await self.connect_and_send(node, final_request.create_message(self.addr), wait_for_receive=True)
             response = Message.from_str(response.decode())
-            self.add_neighbor(response.addr)
-            logging.info(f"new neighbors for {self.addr.hostname} : {node.hostname}")
-
-            if get_blockchain:
-                # get block chain from other nodes
-                #TODO: resolve blockchain
-                raise NotImplementedError("Not implemented get block and blockchain yet!")
+            if response.status:
+                self.add_neighbor(response.addr)
+                logging.info(f"new neighbors for {self.addr.hostname} : {node.hostname}")
+                if get_blockchain:
+                    # get block chain from other nodes
+                    #TODO: resolve blockchain
+                    raise NotImplementedError("Not implemented get block and blockchain yet!")
 
     async def send_mined_block(self, block: Block):
         """declare other nodes for find new block"""

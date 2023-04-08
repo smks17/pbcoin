@@ -164,9 +164,10 @@ class ProcessingHandler:
         addr.pub_key = message.data["pub_key"]
         if node.delete_neighbor(addr):
             logging.info(f"delete neighbor for {node.addr.hostname}: {message.addr.hostname}")
+            response = Message(True, ConnectionCode.OK_MESSAGE, addr)
         else:
             # TODO: make a error message
-            response.status = False
+            response = Message(False, 0, addr)
         await node.write(peer.writer, response.create_message(node.addr), message.addr) 
         
     async def handle_mined_block(self, message: Message, peer: Peer, node: Node):
