@@ -22,13 +22,15 @@ class TestNetworkBase:
 
     @pytest.fixture
     async def run_nodes(self, request):
-        """it runs n nodes that n come from request param then save nodes and
-        tasks (that is runners of nodes as async) in self.nodes and self.tasks.
-        also, adds the close function of nodes in the finalizer that will be run
-        after doing each test
+        """it runs n nodes that n come from request param also request has
+        neighbor_finding for run or not start up for each node to find neighbors
+        then save nodes and tasks (that is runners of nodes as async) in self.nodes
+        and self.tasks Also, adds the close function of nodes in the finalizer
+        that will be run after doing each test
         """
         self.__class__.nodes = []
-        for i in range(request.param):
+        n , neighbor_finding = request.param
+        for i in range(n):
             addr = Addr(ip=f"{self.BASE_IP}.{i+1}",
                         port=self.PORT,
                         pub_key=f"0x2{i+1}")  # TODO: make a valid public key with Key class
@@ -43,7 +45,7 @@ class TestNetworkBase:
         for node in self.nodes:
             task = asyncio.create_task(node.listen())
             self.tasks.append(task)
-            if node.addr.ip == self.SENDER_IP:
+            if not neighbor_finding or node.addr.ip == self.SENDER_IP:
                 continue
             #! TODO: find a better way
             #! just use for waiting process message by receiver and then check out things
@@ -84,7 +86,9 @@ class TestMakeConnection(TestNetworkBase):
                 assert node.neighbors.items() <= actual_neighbors(node.addr).items()
         return check
 
-    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    @pytest.mark.parametrize(
+        "run_nodes", [(2, False)], ids = ["two nodes"], indirect = True
+    )
     async def test_is_up_and_interactable(self, run_nodes):
         """run 2 nodes and check they connected or not"""
         sender = self.nodes[0]
@@ -103,7 +107,7 @@ class TestMakeConnection(TestNetworkBase):
 
     
     @pytest.mark.parametrize(
-        "run_nodes", [2, 4], ids = ["two nodes", "four nodes"], indirect = True
+        "run_nodes", [(2, True), (4, True)], ids = ["two nodes", "four nodes"], indirect = True
     )
     async def test_find_neighbors_more_total_connection_nodes(self, run_nodes, actual_neighbors):
         """run 2 and 4 nodes and check they handle neighbors even if more than
@@ -146,21 +150,18 @@ class TestHandlerMessage(TestNetworkBase):
             return blocks
         return iner
 
-    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    @pytest.mark.parametrize("run_nodes", [(2, True)], ids=["two nodes"], indirect=True)
     async def test_handling_mined_block(self, run_nodes, mine_some_blocks):
         sender = self.nodes[0]
         blocks = await mine_some_blocks(1, sender, True)
         receiver = self.nodes[1]
-        #! just use for waiting process message by receiver and then check out things
-        #! TODO: find a better way
-        await asyncio.sleep(0.2)
         # assertions
         assert receiver.proc_handler.blockchain.height == 1,  \
                 "Didn't received mined block"
         assert receiver.proc_handler.blockchain.last_block == blocks[-1],  \
                 "Received block is not same with mined block"
 
-    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    @pytest.mark.parametrize("run_nodes", [(2, False)], ids=["two nodes"], indirect=True)
     async def test_handling_bad_mined_block(self, run_nodes, mine_some_blocks):
         sender = self.nodes[0]
         blocks = await mine_some_blocks(1, sender, False)
@@ -174,7 +175,7 @@ class TestHandlerMessage(TestNetworkBase):
         assert receiver.proc_handler.blockchain.height == 0, \
                 "it received bad mined block"
 
-    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    @pytest.mark.parametrize("run_nodes", [(2, False)], ids=["two nodes"], indirect=True)
     async def test_resolving_blockchain(self, run_nodes, mine_some_blocks):
         sender = self.nodes[0]
         receiver = self.nodes[1]
@@ -194,7 +195,7 @@ class TestHandlerMessage(TestNetworkBase):
         assert receiver.proc_handler.blockchain.last_block == sender_blocks[-1], \
                "Last Resolved block is not same with mined block"
 
-    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    @pytest.mark.parametrize("run_nodes", [(2, False)], ids=["two nodes"], indirect=True)
     async def test_get_blocks_with_hash(self, run_nodes, mine_some_blocks):
         sender = self.nodes[0]  # send the blocks
         receiver = self.nodes[1]  # receive the blocks
@@ -216,7 +217,7 @@ class TestHandlerMessage(TestNetworkBase):
                            for block in response.data["blocks"]]
         assert sender_blocks == response_blocks, "Didn't received correct blocks"
 
-    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    @pytest.mark.parametrize("run_nodes", [(2, False)], ids=["two nodes"], indirect=True)
     async def test_get_blocks_with_bad_hash(self, run_nodes, mine_some_blocks):
         sender = self.nodes[0]  # send the blocks
         receiver = self.nodes[1]  # receive the blocks
@@ -234,7 +235,7 @@ class TestHandlerMessage(TestNetworkBase):
                and response.type_ == ConnectionCode.SEND_BLOCKS, \
                "Sends the blocks for bad hash"
 
-    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    @pytest.mark.parametrize("run_nodes", [(2, False)], ids=["two nodes"], indirect=True)
     async def test_get_blocks_with_index(self, run_nodes, mine_some_blocks):
         sender = self.nodes[0]  # send the blocks
         receiver = self.nodes[1]  # receive the blocks
@@ -256,7 +257,7 @@ class TestHandlerMessage(TestNetworkBase):
                            for block in response.data["blocks"]]
         assert sender_blocks == response_blocks, "Didn't received correct blocks"
 
-    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    @pytest.mark.parametrize("run_nodes", [(2, False)], ids=["two nodes"], indirect=True)
     async def test_get_blocks_with_index(self, run_nodes, mine_some_blocks):
         sender = self.nodes[0]  # send the blocks
         receiver = self.nodes[1]  # receive the blocks
@@ -274,7 +275,7 @@ class TestHandlerMessage(TestNetworkBase):
                and response.type_ == ConnectionCode.SEND_BLOCKS, \
                "Sends the blocks for bad index"
     
-    @pytest.mark.parametrize("run_nodes", [2], ids=["two nodes"], indirect=True)
+    @pytest.mark.parametrize("run_nodes", [(2, True)], ids=["two nodes"], indirect=True)
     async def test_handling_new_trx(self, run_nodes, mine_some_blocks):
         sender = self.nodes[0]
         receiver = self.nodes[1]
