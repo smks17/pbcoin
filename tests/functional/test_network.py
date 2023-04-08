@@ -245,9 +245,9 @@ class TestHandlerMessage(TestNetworkBase):
                                       True)
         response = Message.from_str(response.decode())
         # assertions
-        assert ((response.status == True
-                 and response.type_ == ConnectionCode.SEND_BLOCKS),
-                "Doesn't send proper message prototype")
+        assert (response.status == True  \
+                and response.type_ == ConnectionCode.SEND_BLOCKS),  \
+                "Doesn't send proper message prototype"
         response_blocks = [Block.from_json_data_full(block)
                            for block in response.data["blocks"]]
         assert sender_blocks == response_blocks, "Didn't received correct blocks"
