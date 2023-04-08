@@ -51,7 +51,7 @@ class ProcessingHandler:
             await self.handle_send_blocks(*args)
         elif message.type_ == ConnectionCode.ADD_TRX:
             await self.handle_new_trx(*args)
-        elif message.type_ == ConnectionCode.PING:
+        elif message.type_ == ConnectionCode.PING_PONG:
             await self.handle_ping(*args)
 
     def handle_error(self, message: Message, peer: Peer, node: Node):
@@ -276,7 +276,6 @@ class ProcessingHandler:
 
     async def handle_ping(self, message: Message, peer: Peer, node: Node):
         response = message.copy()
-        response.addr = node.addr
         try:
             await node.write(peer.writer, response.create_message(node.addr), message.addr)
         except ConnectionError:

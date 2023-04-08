@@ -35,7 +35,7 @@ class ConnectionCode(IntEnum):
     GET_BLOCKS = auto()  # request for get some blocks
     SEND_BLOCKS = auto()  # responds to GET_BLOCKS
     ADD_TRX = auto()  # new trx for add to mempool
-    PING = auto()  # For pinging other nodes and check connection
+    PING_PONG = auto()  # For pinging other nodes and check connection
 
 class Errno(IntEnum):
     BAD_MESSAGE = auto()  # message could not be parsed or isn't standard
@@ -314,7 +314,7 @@ class Message:
                              "signature": kwargs["signature"],
                              "public_key": kwargs["public_key"],
                              "passed_nodes": kwargs["passed_nodes"]}
-            elif self.type_ == ConnectionCode.PING:
+            elif self.type_ == ConnectionCode.PING_PONG:
                 self.data = None
         except KeyError as e:
             logging.error("Bad kwargs for creating message data", exec_info = True)

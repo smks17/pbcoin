@@ -209,3 +209,14 @@ class Node(Connection):
             await self.connect_and_send(dst_addr,
                                         message.create_message(self.addr),
                                         False)
+
+    async def send_ping_to(self, dst_addr) -> bool:
+        request = Message(True, ConnectionCode.PING_PONG, dst_addr)
+        try:
+            rec = await self.connect_and_send(dst_addr,
+                                                request.create_message(self.addr),
+                                                wait_for_receive=True)
+            if rec == None: return False
+        except Exception:
+            return False
+        return True

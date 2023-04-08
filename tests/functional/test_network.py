@@ -93,19 +93,8 @@ class TestMakeConnection(TestNetworkBase):
         """run 2 nodes and check they connected or not"""
         sender = self.nodes[0]
         receiver = self.nodes[1]
-        request = Message(True, ConnectionCode.PING, sender.addr)
-        try:
-            rec = await sender.connect_and_send(receiver.addr,
-                                                request.create_message(sender.addr),
-                                                wait_for_receive=True)
-            assert rec != None and rec != b'', "Bad response"
-            assert Message.from_str(rec.decode()).status, "Could not response request"
-        except ConnectionError:
-            assert False, "Could not connect to receiver"
-        except Exception:
-            assert False, "Bad response"
+        assert await sender.send_ping_to(receiver.addr), "Could not make connection!"
 
-    
     @pytest.mark.parametrize(
         "run_nodes", [(2, True), (4, True)], ids = ["two nodes", "four nodes"], indirect = True
     )
