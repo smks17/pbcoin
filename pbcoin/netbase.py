@@ -26,6 +26,7 @@ AsyncReader = NewType("AsyncReader", asyncio.StreamReader)
 
 
 class ConnectionCode(IntEnum):
+    OK_MESSAGE = auto()  # for ok reply to request
     NEW_NEIGHBOR = auto()  # send information node as a new neighbors
     NEW_NEIGHBORS_REQUEST = auto()  # request some new nodes for neighbors
     NEW_NEIGHBORS_FIND = auto()  # declare find new neighbors ()
