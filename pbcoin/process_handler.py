@@ -189,22 +189,45 @@ class ProcessingHandler:
                     last.update_outputs(self.unspent_coins)
                     self.wallet.updateBalance(deepcopy(last.transactions))
                     logging.info(f"New mined block from {message.addr.hostname}")
-                    logging.debug(
-                        f"info mined block from {message.addr.hostname}: {block.get_data()}")
+                    logging.debug(f"info mined block from {message.addr.hostname}: {block.get_data()}")
+                    ok_msg = Message(True, ConnectionCode.OK_MESSAGE, message.addr)
+                    logging.debug(f"new block chian: {self.blockchain.get_hashes()}")
+                    await node.write(peer.writer, ok_msg.create_message(node.addr))
             else:
-                # TODO: request for get n block before this block for add to its blockchain and resolve
-                pass
+                # request for get n block before this block for add to its blockchain and resolve
+                request = Message(status = True,
+                                  type_ = ConnectionCode.GET_BLOCKS,
+                                  addr = message.addr,
+                                  ).create_data(first_index = self.blockchain.height)
+                res = await node.connect_and_send(message.addr, request.create_message(node.addr))
+                res = Message.from_str(res.decode())
+                if res.status:
+                    blocks = res.data['blocks']
+                    blocks = [Block.from_json_data_full(block) for block in blocks]
+                    result = self.blockchain.resolve(blocks, self.unspent_coins)
+                    if result[0]:
+                        logging.debug(f"new block chian: {self.blockchain.get_hashes()}")
+                        ok_msg = Message(True, ConnectionCode.OK_MESSAGE, res.addr)
+                        await node.write(peer.writer, ok_msg.create_message(node.addr))
+                    else:
+                        # TODO: send problem to node if result is False otherwise send ok message
+                        logging.error("Bad validation blocks that it sent for get blocks")
+                else:
+                    # TODO
+                    logging.error("Bad request send for get blocks")
         else:
             # TODO: current blockchain is longer so declare other for resolve that
             logging.error("Not implemented resolve shorter blockchain")
-        logging.debug(f"new block chian: {self.blockchain.get_hashes()}")
         
-    def handle_resolve_blockchain(self, message: Message, peer: Peer, node: Node):
+    async def handle_resolve_blockchain(self, message: Message, peer: Peer, node: Node):
         blocks = message.data['blocks']
         blocks = [Block.from_json_data_full(block) for block in blocks]
         result = self.blockchain.resolve(blocks, self.unspent_coins)
         if not result[0]:
             pass  # TODO: should tell other nodes that blocks have problem
+        else:
+            ok_msg = Message(True, ConnectionCode.OK_MESSAGE, message.addr)
+            await node.write(peer.writer, ok_msg.create_message(node.addr))            
 
     async def handle_get_blocks(self, message: Message, peer: Peer, node: Node):
         """handle for request another node for getting block"""

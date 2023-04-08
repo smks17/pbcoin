@@ -154,9 +154,6 @@ class TestHandlerMessage(TestNetworkBase):
         blocks[0].previous_hash = "Bluh"
         receiver = self.nodes[1]
         await sender.send_mined_block(blocks[0])
-        #! just use for waiting process message by receiver and then check out things
-        #! TODO: find a better way
-        await asyncio.sleep(0.2)
         # assertion
         assert receiver.proc_handler.blockchain.height == 0, \
                 "it received bad mined block"
@@ -171,11 +168,11 @@ class TestHandlerMessage(TestNetworkBase):
                     ConnectionCode.RESOLVE_BLOCKCHAIN,
                     receiver.addr,
                     {"blocks": [block.get_data() for block in sender_blocks]})
-        await sender.connect_and_send(receiver.addr,
+        rec = await sender.connect_and_send(receiver.addr,
                                       message.create_message(sender.addr),
-                                      False)
+                                      True)
         # assertions
-        await asyncio.sleep(0.2)
+        assert Message.from_str(rec.decode()).status, "Could not resolve"
         assert receiver.proc_handler.blockchain.height == 2, \
                "Didn't received new block or didn't resolve new blockchain"
         assert receiver.proc_handler.blockchain.last_block == sender_blocks[-1], \

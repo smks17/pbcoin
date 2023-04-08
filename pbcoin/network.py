@@ -191,9 +191,12 @@ class Node(Connection):
         for pub_key in self.neighbors:
             dst_addr = self.neighbors[pub_key]
             message.addr = dst_addr
-            await self.connect_and_send(dst_addr,
-                                        message.create_message(self.addr),
-                                        False)
+            response = await self.connect_and_send(dst_addr,
+                                                   message.create_message(self.addr),
+                                                   True)
+            response = Message.from_str(response.decode())
+            if response.status != True:
+                pass  # TODO: handle error if it says right
 
     async def send_new_trx(self, trx: Trx, wallet: Wallet):
         """declare other neighbors new transaction for adding to mempool"""
