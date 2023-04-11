@@ -8,7 +8,7 @@ from pbcoin.blockchain import BlockChain
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
 from pbcoin.mempool import Mempool
 from pbcoin.mine import Mine
-from pbcoin.netbase import Addr, ConnectionCode, Message
+from pbcoin.netbase import Addr, ConnectionCode, Errno, Message
 from pbcoin.network import Node
 from pbcoin.process_handler import ProcessingHandler
 from pbcoin.trx import Trx
@@ -92,6 +92,21 @@ class TestMakeConnection(TestNetworkBase):
         receiver = self.nodes[1]
         assert await sender.send_ping_to(receiver.addr), "Could not make connection!"
 
+    @pytest.mark.parametrize(
+        "run_nodes", [(2, False)], ids = ["two nodes"], indirect = True
+    )
+    async def test_return_bad_message(self, run_nodes):
+        """run 2 nodes and check they connected or not"""
+        sender = self.nodes[0]
+        receiver = self.nodes[1]
+        message_res = await sender.connect_and_send(
+            receiver.addr,
+            b"Bluh",
+            True)
+        message_res = Message.from_str(message_res.decode())
+        assert (not message_res.status) and (message_res.type_ == Errno.BAD_MESSAGE),  \
+            "Other node hasn't understood that the message is wrong!"
+        
     @pytest.mark.parametrize(
         "run_nodes", [(2, True), (4, True)], ids = ["two nodes", "four nodes"], indirect = True
     )
