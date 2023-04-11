@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+from json import JSONDecodeError
 import random
 from typing import (
     Any,
@@ -19,7 +20,7 @@ from typing import (
 from pbcoin.block import Block
 import pbcoin.config as conf
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
-from pbcoin.logger import getLogger
+from pbcoin.logger import getLogger, log_error_message
 from pbcoin.netbase import (
     Addr,
     AsyncReader,
@@ -54,23 +55,25 @@ class Node(Connection):
     async def handle_peer(self, reader: AsyncReader, writer: AsyncWriter):
         """ this is a callback method that
         handles requests data that receive from other nodes"""
-        peer = Peer(writer=writer, reader=reader)
+        ip, port = writer.get_extra_info('peername')
+        peer = Peer(addr=Addr(ip, port), writer=writer, reader=reader)
         data = await self.read(peer.reader, peer.addr)
         if data is None:
             raise Exception("Something wrong with read method and returns None")
-        data = data.decode()
-        if data == "":
-            logging.warning(f"Get a empty data from {peer.addr}")
-            return
-        logging.debug('receive data: ' + data)
-        message = None
         try:
+            data = data.decode()
+            message = None
             #TODO: check that request is from neighbors or not
             message = Message.from_str(data)
-        except Exception as e:
-            #TODO: Create error message
-            logging.debug(f"Bad message from {peer.addr}")
+        except (JSONDecodeError, KeyError):
+            logging.debug(f"Get a bad data message from {peer.addr}")
+            error = Message(False, Errno.BAD_MESSAGE, peer.addr)
+            await self.write(peer.writer, error.create_message(self.addr))
             return
+        except:
+            logging.error("Something wrong in parsing message", exec_info=True)
+            return
+        logging.debug('receive data: ' + data)
         peer.addr = message.addr  # TODO: maybe it's better right check for pub_key 
         if not conf.settings.glob.debug:
             self.tasks.append(asyncio.create_task(self.proc_handler.handle(message, peer, self)))
@@ -157,6 +160,12 @@ class Node(Connection):
                                                      passed_nodes = [self.addr.hostname])
             response = await self.connect_and_send(seed, request.create_message(self.addr), wait_for_receive=True)
             response = Message.from_str(response.decode())
+            if not response.status:
+                log_error_message(logging,
+                                  seed,
+                                  request.type_.name,
+                                  response.type_.name)
+                continue
             nodes += Addr.convert_to_addr_list(response.data['p2p_nodes'])
             # checking find all neighbors
             if (response.status == True
@@ -181,6 +190,11 @@ class Node(Connection):
                     # get block chain from other nodes
                     #TODO: resolve blockchain
                     raise NotImplementedError("Not implemented get block and blockchain yet!")
+            else:
+                log_error_message(logging,
+                                  seed,
+                                  request.type_.name,
+                                  response.type_.name)
 
     async def send_mined_block(self, block: Block):
         """declare other nodes for find new block"""
@@ -194,9 +208,15 @@ class Node(Connection):
             response = await self.connect_and_send(dst_addr,
                                                    message.create_message(self.addr),
                                                    True)
-            response = Message.from_str(response.decode())
-            if response.status != True:
-                pass  # TODO: handle error if it says right
+            try:
+                response = Message.from_str(response.decode())
+            except:
+                continue  # NOTE: Here is not too much matter
+            if not response.status:
+                log_error_message(logging,
+                                  dst_addr.hostname,
+                                  message.type_.name,
+                                  response.type_.name)
 
     async def send_new_trx(self, trx: Trx, wallet: Wallet):
         """declare other neighbors new transaction for adding to mempool"""
@@ -220,6 +240,13 @@ class Node(Connection):
                                                 request.create_message(self.addr),
                                                 wait_for_receive=True)
             if rec == None: return False
+            rec = Message.from_str(rec.decode())
+            if not rec.status:
+                log_error_message(logging,
+                                  dst_addr.hostname,
+                                  request.type_.name,
+                                  rec.type_.name)
+                return False
         except Exception:
             return False
         return True

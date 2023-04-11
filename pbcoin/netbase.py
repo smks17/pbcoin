@@ -249,32 +249,26 @@ class Message:
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> Message:
-        try:
-            copy_data = deepcopy(data)
-            src_addr = Addr.from_hostname(copy_data["src_addr"])
-            src_addr.pub_key = copy_data["pub_key"]
-            new_message = Message(copy_data["status"],
-                                  copy_data["type"],
-                                  src_addr)
-            extra_data = copy_data.get("data", None)
-            if extra_data is None:
-                return new_message
-            return new_message.create_data(**extra_data)
-        except KeyError as e:
-            logging.debug("Bad key for parsing data message", exec_info = True)
-            raise e
+        copy_data = deepcopy(data)
+        src_addr = Addr.from_hostname(copy_data["src_addr"])
+        src_addr.pub_key = copy_data["pub_key"]
+        new_message = Message(copy_data["status"],
+                              copy_data["type"],
+                              src_addr)
+        extra_data = copy_data.get("data", None)
+        if extra_data is None:
+            return new_message
+        return new_message.create_data(**extra_data)
 
     @staticmethod
     def from_str(data: str) -> Message:
-        try:
-            return Message.from_dict(json.loads(data))
-        except KeyError as e:
-            logging.debug("Bad key for parsing data message", exec_info = True)
-            raise e
+        return Message.from_dict(json.loads(data))
             
     def create_data(self, **kwargs):
         try:
-            if self.type_ == ConnectionCode.NEW_NEIGHBOR:
+            if not self.status:
+                pass
+            elif self.type_ == ConnectionCode.NEW_NEIGHBOR:
                 self.data = {
                     "new_node": kwargs["new_node"],
                     "new_pub_key": kwargs["new_pub_key"]

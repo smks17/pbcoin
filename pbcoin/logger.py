@@ -45,3 +45,11 @@ def getLogger(name: str, do_logging: Optional[bool]=None):
     logger.addHandler(console)
     logger.addHandler(logfile)
     return logger
+
+def log_error_message(logger: logging.Logger,
+                        hostname: str,
+                        req_type: str,
+                        res_type: str):
+    logger.error(f"Get error from node {hostname}"
+                  f"for message {req_type}"
+                  f"with err {res_type}")
