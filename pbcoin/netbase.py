@@ -252,9 +252,12 @@ class Message:
         copy_data = deepcopy(data)
         src_addr = Addr.from_hostname(copy_data["src_addr"])
         src_addr.pub_key = copy_data["pub_key"]
-        new_message = Message(copy_data["status"],
-                              copy_data["type"],
-                              src_addr)
+        status = copy_data["status"]
+        if status == True:
+            type = ConnectionCode(copy_data["type"])
+        else:
+            type = Errno(copy_data["type"])
+        new_message = Message(status, type, src_addr)
         extra_data = copy_data.get("data", None)
         if extra_data is None:
             return new_message

@@ -242,7 +242,7 @@ class TestHandlerMessage(TestNetworkBase):
         response = Message.from_str(response.decode())
         # assertions
         assert response.status == False \
-               and response.type_ == ConnectionCode.SEND_BLOCKS, \
+               and response.type_ == Errno.BAD_BLOCK_VALIDATION, \
                "Sends the blocks for bad hash"
 
     @pytest.mark.parametrize("run_nodes", [(2, False)], ids=["two nodes"], indirect=True)
@@ -282,7 +282,7 @@ class TestHandlerMessage(TestNetworkBase):
         response = Message.from_str(response.decode())
         # assertions
         assert response.status == False \
-               and response.type_ == ConnectionCode.SEND_BLOCKS, \
+               and response.type_ == Errno.BAD_BLOCK_VALIDATION, \
                "Sends the blocks for bad index"
     
     @pytest.mark.parametrize("run_nodes", [(2, True)], ids=["two nodes"], indirect=True)

@@ -8,7 +8,7 @@ from ellipticcurve.signature import Signature
 
 from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
-from pbcoin.netbase import Addr, ConnectionCode, Message, Peer
+from pbcoin.netbase import Addr, ConnectionCode, Errno, Message, Peer
 from pbcoin.logger import getLogger
 from pbcoin.trx import Coin, Trx
 if TYPE_CHECKING:
@@ -245,7 +245,7 @@ class ProcessingHandler:
             logging.debug("doesn't have self chain!")
             # TODO: report with error code
             request = Message(False,
-                              ConnectionCode.SEND_BLOCKS,
+                              Errno.BAD_BLOCK_VALIDATION,
                               message.addr)
         else:
             blocks = copy_blockchain.get_data(first_index)
