@@ -1,5 +1,7 @@
 from __future__ import annotations
+import asyncio
 
+import threading
 from copy import copy, deepcopy
 from typing import TYPE_CHECKING, Dict, Optional
 
@@ -26,13 +28,23 @@ class ProcessingHandler:
         self.unspent_coins = unspent_coins
         self.wallet = wallet
         self.mempool = mempool
+        self._threads = []
+
+    def _run_in_thread(self, func, *args):
+        def between_callback(func, *args):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(func(*args))
+            loop.close()
+        t = threading.Thread(target=between_callback, args=[func, *args])
+        self._threads.append(t)
+        t.start()
         
     async def handle(self, *args) -> bool:
         message = args[0]
         # TODO: Check the structure of message data is correct or not 
         if not message.status:
             self.handle_error()
-        assert len(ConnectionCode) == 10, "Some ConnectionCode are not implemented yet!"
         if message.type_ == ConnectionCode.NEW_NEIGHBOR:
             await self.handle_new_neighbor(*args)
         elif message.type_ == ConnectionCode.NEW_NEIGHBORS_REQUEST:
