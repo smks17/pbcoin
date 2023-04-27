@@ -137,6 +137,7 @@ class TestHandlerMessage(TestNetworkBase):
                          node.proc_handler.wallet,
                          Mempool())
             blocks = []
+            errors = []
             for n in range(n_mine):
                 pre_hash = ""
                 if n != 0:
@@ -148,17 +149,21 @@ class TestHandlerMessage(TestNetworkBase):
                 await miner.mine(setup_block=new_block,
                                  send_network=False)
                 if send_mined_block:
-                    await node.send_mined_block(new_block)
+                    errors += await node.send_mined_block(new_block)
                 blocks.append(new_block)
-            return blocks
+            if send_mined_block:
+                return blocks, errors
+            else:
+                return blocks
         return iner
 
     @pytest.mark.parametrize("run_nodes", [(2, True)], ids=["two nodes"], indirect=True)
     async def test_handling_mined_block(self, run_nodes, mine_some_blocks):
         sender = self.nodes[0]
-        blocks = await mine_some_blocks(1, sender, True)
+        blocks, errors = await mine_some_blocks(1, sender, True)
         receiver = self.nodes[1]
         # assertions
+        assert errors == [], "Mined block probably wrong"
         assert receiver.proc_handler.blockchain.height == 1,  \
                 "Didn't received mined block"
         assert receiver.proc_handler.blockchain.last_block == blocks[-1],  \
@@ -169,21 +174,23 @@ class TestHandlerMessage(TestNetworkBase):
         sender = self.nodes[0]
         blocks = await mine_some_blocks(2, sender, False)
         receiver = self.nodes[1]
-        await sender.send_mined_block(blocks[-1])
+        errors = await sender.send_mined_block(blocks[-1])
         # assertions
+        assert errors == [], "Mined block probably wrong"
         assert receiver.proc_handler.blockchain.height == 2,  \
                 "Didn't received mined block"
         assert receiver.proc_handler.blockchain.blocks == blocks,  \
                 "Received block is not same with mined block"
 
-    @pytest.mark.parametrize("run_nodes", [(2, False)], ids=["two nodes"], indirect=True)
+    @pytest.mark.parametrize("run_nodes", [(2, True)], ids=["two nodes"], indirect=True)
     async def test_handling_bad_mined_block(self, run_nodes, mine_some_blocks):
         sender = self.nodes[0]
         blocks = await mine_some_blocks(1, sender, False)
-        blocks[0].previous_hash = "Bluh"
+        blocks[0].block_hash = hex(((2 ** 512 - 1) >> (2)) + 1)
         receiver = self.nodes[1]
-        await sender.send_mined_block(blocks[0])
+        errors = await sender.send_mined_block(blocks[0])
         # assertion
+        assert len(errors) != 0
         assert receiver.proc_handler.blockchain.height == 0, \
                 "it received bad mined block"
 

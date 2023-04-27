@@ -194,8 +194,12 @@ class ProcessingHandler:
                 # just this block is new
                 done = self.blockchain.add_new_block(block, self.unspent_coins)
                 if done != BlockValidationLevel.ALL():
-                    # TODO: send why receive data is a bad request
-                    logging.error(f"Bad request mined block from {message.addr.hostname} validation: {done}")
+                    error = Message(False, Errno.BAD_BLOCK_VALIDATION, peer.addr)
+                    error = error.create_data(block_hash=block.__hash__,
+                                              block_height=block.block_height,
+                                              validation=done)
+                    await node.write(peer.writer, error.create_message(node.addr))
+                    logging.debug(f"Bad request mined block from {message.addr.hostname} validation: {done}")
                 else:
                     last = self.blockchain.last_block
                     last.update_outputs(self.unspent_coins)

@@ -196,12 +196,13 @@ class Node(Connection):
                                   request.type_.name,
                                   response.type_.name)
 
-    async def send_mined_block(self, block: Block):
+    async def send_mined_block(self, block: Block) -> List[Tuple[Addr, Errno, Dict]]:
         """declare other nodes for find new block"""
         message = Message(True,
                           ConnectionCode.MINED_BLOCK,
                           None,
                           {"block": block.get_data()})
+        errors = []
         for pub_key in self.neighbors:
             dst_addr = self.neighbors[pub_key]
             message.addr = dst_addr
@@ -213,10 +214,14 @@ class Node(Connection):
             except:
                 continue  # NOTE: Here is not too much matter
             if not response.status:
+                if response.type_ == Errno.BAD_BLOCK_VALIDATION:
+                    pass  # TODO: better handle error
+                errors.append((response.addr, response.type_, response.data))
                 log_error_message(logging,
                                   dst_addr.hostname,
                                   message.type_.name,
                                   response.type_.name)
+        return errors
 
     async def send_new_trx(self, trx: Trx, wallet: Wallet):
         """declare other neighbors new transaction for adding to mempool"""

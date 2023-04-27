@@ -270,7 +270,15 @@ class Message:
     def create_data(self, **kwargs):
         try:
             if not self.status:
-                pass
+                if self.type_ == Errno.BAD_MESSAGE:
+                    self.data = None
+                    pass
+                elif self.type_ == Errno.BAD_BLOCK_VALIDATION:
+                    self.data = {
+                        "block_hash": kwargs["block_hash"],
+                        "block_index": kwargs["block_index"],
+                        "validation": kwargs["validation"]
+                    }
             elif self.type_ == ConnectionCode.NEW_NEIGHBOR:
                 self.data = {
                     "new_node": kwargs["new_node"],
