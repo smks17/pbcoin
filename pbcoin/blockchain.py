@@ -64,6 +64,8 @@ class BlockChain:
             validation = BlockValidationLevel.ALL()
         if validation == BlockValidationLevel.ALL():
             self.blocks.append(deepcopy(block_))
+            if not unspent_coins is None:
+                self.last_block.update_outputs(unspent_coins)
         if (not self.is_full_node) and (self.__sizeof__() >= self.cache):
             self.blocks.pop(0)
         return validation

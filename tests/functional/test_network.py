@@ -306,6 +306,7 @@ class TestHandlerMessage(TestNetworkBase):
         wallet.updateBalance(deepcopy(blockchain.last_block.transactions))
         value = 25
         new_trx = None
+        errors = []
         if value <= wallet.n_amount:
             new_trx = Trx.make_trx(sum(list(wallet.out_coins.values()), []),
                                         wallet.public_key, receiver.addr.pub_key, 25)
@@ -314,8 +315,8 @@ class TestHandlerMessage(TestNetworkBase):
                                                                      wallet.walletKey.publicKey(),
                                                                      sender.proc_handler.unspent_coins)
             assert result
-            await sender.send_new_trx(new_trx, wallet)
-        await asyncio.sleep(0.2)
+            errors = await sender.send_new_trx(new_trx, wallet)
+        assert errors == []
         assert receiver.proc_handler.mempool.is_exist(new_trx.hash_trx),  \
                 "Didn't received new trx in mempool"
 

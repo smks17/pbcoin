@@ -226,17 +226,33 @@ class Node(Connection):
     async def send_new_trx(self, trx: Trx, wallet: Wallet):
         """declare other neighbors new transaction for adding to mempool"""
         message = Message(True,
-                      ConnectionCode.ADD_TRX,
-                      None).create_data(trx = trx.get_data(with_hash=True),
-                                        signature = wallet.base64Sign(trx),
-                                        public_key = wallet.public_key,
-                                        passed_nodes = [self.addr.hostname])
+                          ConnectionCode.ADD_TRX,
+                          None)
+        message = message.create_data(trx = trx.get_data(with_hash=True),
+                                      signature = wallet.base64Sign(trx),
+                                      public_key = wallet.public_key,
+                                      passed_nodes = [self.addr.hostname])
+        errors = []
         for pub_key in self.neighbors:
             dst_addr = self.neighbors[pub_key]
             message.addr = dst_addr
-            await self.connect_and_send(dst_addr,
-                                        message.create_message(self.addr),
-                                        False)
+            response = await self.connect_and_send(dst_addr,
+                                                   message.create_message(self.addr),
+                                                   True)
+            if response is None: continue
+            try:
+                response = Message.from_str(response.decode())
+            except:
+                continue
+            if not response.status:
+                if response.type_ == Errno.BAD_TRANSACTION:
+                    pass  # TODO: better handle error
+                errors.append((response.addr, response.type_, response.data))
+                log_error_message(logging,
+                                  dst_addr.hostname,
+                                  message.type_.name,
+                                  response.type_.name)
+        return errors
 
     async def send_ping_to(self, dst_addr) -> bool:
         request = Message(True, ConnectionCode.PING_PONG, dst_addr)

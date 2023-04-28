@@ -57,6 +57,7 @@ class Mine:
     async def mine(
         self,
         setup_block: Optional[Block] = None,
+        unspent_coins = None,  # almost just for unittest
         add_block = True,
         difficulty: Optional[int] = None,  # almost just for unittest
         send_network: Optional[bool] = None  # almost just for unittest
@@ -116,7 +117,7 @@ class Mine:
                 await self.node.send_mined_block(self.setup_block)
             if add_block and type(self.blockchain) is BlockChain:
                 self.blockchain.add_new_block(
-                    self.setup_block, ignore_validation=True, difficulty=difficulty)
+                    self.setup_block, ignore_validation=True, unspent_coins=unspent_coins, difficulty=difficulty)
                 logging.debug(f"New blockchain: {self.blockchain.get_hashes()}")
             elif add_block:
                 self.blockchain.append(self.setup_block)

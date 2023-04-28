@@ -310,8 +310,11 @@ class ProcessingHandler:
                     copy_msg.src_addr = self.node.addr
                     copy_msg.dst_addr = dst_addr
                     await self.connect_and_send(dst_addr, copy_msg.create_message(self.addr), False)
+            ok_message = Message(True, ConnectionCode.OK_MESSAGE, message.addr)
+            await node.write(peer.writer, ok_message.create_message(node.addr), True)
         else:
-            pass  # TODO
+            error = Message(False, Errno.BAD_TRANSACTION, message.addr)
+            await node.write(peer.writer, error.create_message(node.addr), True)
 
     async def handle_ping(self, message: Message, peer: Peer, node: Node):
         response = message.copy()
