@@ -147,6 +147,7 @@ class TestHandlerMessage(TestNetworkBase):
                 else:
                     new_block = Block(pre_hash, n+1)
                 await miner.mine(setup_block=new_block,
+                                 unspent_coins=node.proc_handler.unspent_coins,
                                  send_network=False)
                 if send_mined_block:
                     errors += await node.send_mined_block(new_block)
@@ -310,7 +311,6 @@ class TestHandlerMessage(TestNetworkBase):
                                         wallet.public_key, receiver.addr.pub_key, 25)
             result = sender.proc_handler.mempool.add_new_transaction(new_trx,
                                                                      wallet.sign(new_trx),
-                                                                     blockchain.last_block,
                                                                      wallet.walletKey.publicKey(),
                                                                      sender.proc_handler.unspent_coins)
             assert result

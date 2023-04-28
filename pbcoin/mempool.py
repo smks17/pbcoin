@@ -40,8 +40,8 @@ class Mempool:
             if trx not in self.in_mining_block:
                 self.in_mining_block.append(trx)
 
-    def add_new_transaction(self, trx: Trx, sig: Signature, last_block: Block,
-                            pub_key: PublicKey, unspent_coins: Dict[str, Coin]) -> bool:
+    def add_new_transaction(self, trx: Trx, sig: Signature, pub_key: PublicKey,
+                            unspent_coins: Dict[str, Coin]) -> bool:
         """add a new transaction to the all mempool transaction and the queue for mining block
         
         Args
@@ -50,8 +50,6 @@ class Mempool:
             the transaction that you want add to the mempool
         sig: Signature
             signature of the transaction that sender sign
-        last_block: Block
-            the last block of blockchain
         pub_key: PublicKey
             sender public key
         unspent_coins: Dict[str, Coin]
@@ -65,7 +63,7 @@ class Mempool:
         if not Ecdsa.verify(trx.__hash__, sig, pub_key):
             return False
         # check double spent and other things
-        if not last_block.check_trx(unspent_coins):
+        if not trx.check(unspent_coins):
             return False
         self.transactions[trx.__hash__] = deepcopy(trx)
         self.add_in_mining()

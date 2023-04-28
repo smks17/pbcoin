@@ -104,24 +104,8 @@ class Block:
     def check_trx(self, unspent_coins: dict[str, Coin]) -> bool:
         """checking the all block trx"""
         # TODO: return validation
-        for index, trx in enumerate(self.transactions):
-            in_coins = trx.inputs
-            out_coins = trx.outputs
-            for coin in in_coins:
-                # is input coin trx valid
-                if coin is not None and not coin.check_input_coin(unspent_coins):
-                    return False
-            if index != 0:
-                # check equal input and output value
-                output_value = sum(out_coin.value for out_coin in out_coins)
-                input_value = sum(in_coin.value for in_coin in in_coins)
-                if output_value != input_value:
-                    return False
-            # check valid time
-            if trx.time <= datetime(2022, 1, 1).timestamp():
-                return False
-            # check trx hash output coin
-            if not all([out_coin.trx_hash == trx.hash_trx for out_coin in out_coins]):
+        for trx in self.transactions:
+            if not trx.check(unspent_coins):
                 return False
         return True
 

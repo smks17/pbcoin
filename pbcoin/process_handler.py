@@ -300,7 +300,6 @@ class ProcessingHandler:
         # add to mempool and send other nodes
         result = self.mempool.add_new_transaction(new_trx,
                                                   sig,
-                                                  self.blockchain.last_block,
                                                   pubKey,
                                                   self.unspent_coins)
         if result:

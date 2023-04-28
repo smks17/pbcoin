@@ -234,6 +234,24 @@ class Trx:
             data['hash'] = self.__hash__
         return data
 
+    def check(self, unspent_coins) -> bool:
+        for index, coin in enumerate(self.inputs):
+            # is input coin trx valid
+            if coin is not None and not coin.check_input_coin(unspent_coins):
+                return False
+            # check equal input and output value
+            output_value = sum(out_coin.value for out_coin in self.outputs)
+            input_value = sum(in_coin.value for in_coin in self.inputs)
+            if output_value != input_value:
+                return False
+            # check valid time
+            if self.time <= datetime(2022, 1, 1).timestamp():
+                return False
+            # check trx hash output coin
+            if not all([out_coin.trx_hash == self.hash_trx for out_coin in self.outputs]):
+                return False
+        return True
+
     @property
     def __hash__(self) -> str:
         return self.calculate_hash() if not self.hash_trx else self.hash_trx

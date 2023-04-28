@@ -82,7 +82,7 @@ class Wallet:
             made_trx = Trx.make_trx(sum(list(self.out_coins.values()), []),
                                         self.public_key, recipient, value)
             # add to own mempool
-            if not mempool.add_new_transaction(made_trx, self.sign(made_trx), blockchain.last_block, self.walletKey.publicKey()):
+            if not mempool.add_new_transaction(made_trx, self.sign(made_trx), self.walletKey.publicKey()):
                 return False
             # send to nodes and add to network mempool
             if conf.settings.glob.network:
