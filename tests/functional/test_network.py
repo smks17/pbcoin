@@ -320,3 +320,29 @@ class TestHandlerMessage(TestNetworkBase):
         assert receiver.proc_handler.mempool.is_exist(new_trx.hash_trx),  \
                 "Didn't received new trx in mempool"
 
+    @pytest.mark.parametrize("run_nodes", [(2, True)], ids=["two nodes"], indirect=True)
+    async def test_handling_bad_new_trx(self, run_nodes, mine_some_blocks):
+        sender = self.nodes[0]
+        receiver = self.nodes[1]
+        wallet = sender.proc_handler.wallet
+        blockchain = sender.proc_handler.blockchain
+        subsidy = Trx(blockchain.height, wallet.public_key)
+        await mine_some_blocks(1, sender, True, [subsidy])
+        wallet.updateBalance(deepcopy(blockchain.last_block.transactions))
+        value = 25
+        new_trx = None
+        errors = []
+        if value <= wallet.n_amount:
+            new_trx = Trx.make_trx(sum(list(wallet.out_coins.values()), []),
+                                        wallet.public_key, receiver.addr.pub_key, 25)
+            new_trx.inputs[0].value += 1
+            result = sender.proc_handler.mempool.add_new_transaction(new_trx,
+                                                                     wallet.sign(new_trx),
+                                                                     wallet.walletKey.publicKey(),
+                                                                     sender.proc_handler.unspent_coins)
+            assert not result
+            errors = await sender.send_new_trx(new_trx, wallet)
+        assert len(errors) != 0
+        assert not receiver.proc_handler.mempool.is_exist(new_trx.hash_trx),  \
+                "Didn't received new trx in mempool"
+
