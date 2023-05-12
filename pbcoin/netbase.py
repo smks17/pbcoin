@@ -82,9 +82,9 @@ class Connection:
     async def connect_to(self, src_addr: Addr) -> Peer:
         """make a connection to destination addr and return stream reader and writer"""
         try:
-            fut = asyncio.open_connection(src_addr.ip, src_addr.port)
+            # TODO: add timeout
+            reader, writer = await asyncio.open_connection(src_addr.ip, src_addr.port)
             logging.debug(f"from {self.addr.hostname} Connect to {src_addr.hostname}")
-            reader, writer = await asyncio.wait_for(fut, timeout=self.timeout)
             peer = Peer(addr=src_addr,
                                     writer=writer,
                                     reader=reader,
