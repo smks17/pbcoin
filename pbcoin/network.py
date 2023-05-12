@@ -32,6 +32,7 @@ from pbcoin.netbase import (
     Peer
 )
 from pbcoin.process_handler import ProcessingHandler
+from .blockchain import BlockChain
 if TYPE_CHECKING:
     from pbcoin.trx import Trx
     from pbcoin.wallet import Wallet
@@ -189,7 +190,17 @@ class Node(Connection):
                 if get_blockchain:
                     # get block chain from other nodes
                     #TODO: resolve blockchain
-                    raise NotImplementedError("Not implemented get block and blockchain yet!")
+                    request_blockchain = Message(True, ConnectionCode.GET_BLOCKS, node)
+                    request_blockchain.create_data(first_index=0)
+                    rec = await self.connect_and_send(node, request_blockchain.create_message(self.addr))
+                    rec = Message.from_str(rec.decode())
+                    if rec.status:
+                        blockchain = BlockChain.json_to_blockchain(rec.data['blocks'])
+                        logging.debug(f"Blockchain: {blockchain.blocks}")
+                        if self.proc_handler.blockchain.height < blockchain.height:
+                            self.proc_handler.blockchain = blockchain
+                    else:
+                        raise NotImplementedError()
             else:
                 log_error_message(logging,
                                   seed,
