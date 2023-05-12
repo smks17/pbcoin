@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from .blockchain import BlockChain
     from .mempool import Mempool
     from .mine import Mine
-    from .net import Node
+    from .network import Node
     from .wallet import Wallet
 
 BLOCK_CHAIN: Optional[BlockChain] = None

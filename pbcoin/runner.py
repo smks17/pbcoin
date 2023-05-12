@@ -11,7 +11,9 @@ import pbcoin.config as conf
 from .block import Block
 from .mempool import Mempool
 from .cli_handler import CliServer
-from .net import Node
+from .netbase import Addr
+from .network import Node
+from .process_handler import ProcessingHandler
 from .wallet import Wallet
 from .blockchain import BlockChain
 from .mine import Mine
@@ -37,8 +39,6 @@ async def mine_starter(how_many: Union[inf_type, int]=inf):
         how_many: it determines how many blocks should be mined.If it doesn't pass
         then it is valued with infinity which means mining forever.
     """
-    core.WALLET.gen_key()
-    logging.info(f"your public key is generated: {core.WALLET.public_key}")
     if conf.settings.glob.mining:
         core.BLOCK_CHAIN.is_full_node = conf.settings.glob.full_node
         core.BLOCK_CHAIN.cache = conf.settings.glob.cache * 1000  # to bytes
@@ -55,10 +55,15 @@ async def mine_starter(how_many: Union[inf_type, int]=inf):
 
 async def setup_network(has_cli, has_socket_network):
     """Set up network for connect other nodes and cli"""
+    core.WALLET.gen_key()
+    logging.info(f"your public key is generated: {core.WALLET.public_key}")
     handlers = []
     if has_socket_network:
-        core.NETWORK = Node(core.BLOCK_CHAIN, core.WALLET, core.MEMPOOL, core.ALL_OUTPUTS,
-                            conf.settings.network.ip, conf.settings.network.port)
+        addr = Addr(conf.settings.network.ip,
+                    conf.settings.network.port,
+                    pub_key=core.WALLET.public_key)  # TODO: make a valid public key
+        proc_handler = ProcessingHandler(core.BLOCK_CHAIN, core.ALL_OUTPUTS, core.WALLET, core.MEMPOOL)
+        core.NETWORK = Node(addr, proc_handler, None)
         await core.NETWORK.start_up(conf.settings.network.seeds)
         core.MINER.node = core.NETWORK
         handlers.append(core.NETWORK.listen())

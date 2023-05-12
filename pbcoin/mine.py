@@ -5,7 +5,7 @@ from .block import Block
 from .blockchain import BlockChain
 from .logger import getLogger
 from .mempool import Mempool
-from .net import Node
+from .network import Node
 from .trx import Trx
 from .wallet import Wallet
 import pbcoin.core as core
