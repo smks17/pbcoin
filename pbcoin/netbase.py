@@ -42,9 +42,6 @@ class Errno(IntEnum):
     BAD_MESSAGE = auto()  # message could not be parsed or isn't standard
     BAD_TYPE_MESSAGE = auto()  # message type is not from ConnectionCode
     BAD_BLOCK_VALIDATION = auto()  # the block(s) that were sended has problem
-    # TODO: Not implemented
-    NOT_FOUND_IP_AS_NEIGHBORS = auto()  # sender is not my neighbors (for some messages)
-    # TODO: Not implemented
     BAD_TRANSACTION = auto()  # the transaction(s) that were received has problem 
 
 
