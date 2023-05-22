@@ -11,7 +11,7 @@ import pbcoin.config as conf
 from .block import Block
 from .mempool import Mempool
 from .cli_handler import CliServer
-from .netbase import Addr
+from .utils.netbase import Addr
 from .network import Node
 from .process_handler import ProcessingHandler
 from .wallet import Wallet

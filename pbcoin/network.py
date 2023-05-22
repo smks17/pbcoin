@@ -21,14 +21,12 @@ from pbcoin.block import Block
 import pbcoin.config as conf
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
 from pbcoin.logger import getLogger, log_error_message
-from pbcoin.netbase import (
+from pbcoin.netmessage import ConnectionCode, Errno, Message
+from pbcoin.utils.netbase import (
     Addr,
     AsyncReader,
     AsyncWriter,
     Connection,
-    ConnectionCode,
-    Errno,
-    Message,
     Peer
 )
 from pbcoin.process_handler import ProcessingHandler

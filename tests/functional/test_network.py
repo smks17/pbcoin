@@ -5,10 +5,11 @@ import pytest
 
 from pbcoin.block import Block
 from pbcoin.blockchain import BlockChain
+from pbcoin.netmessage import ConnectionCode, Errno, Message
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
 from pbcoin.mempool import Mempool
 from pbcoin.mine import Mine
-from pbcoin.netbase import Addr, ConnectionCode, Errno, Message
+from pbcoin.utils.netbase import Addr
 from pbcoin.network import Node
 from pbcoin.process_handler import ProcessingHandler
 from pbcoin.trx import Trx

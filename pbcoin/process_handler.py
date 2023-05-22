@@ -10,7 +10,8 @@ from ellipticcurve.signature import Signature
 
 from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
-from pbcoin.netbase import Addr, ConnectionCode, Errno, Message, Peer
+from pbcoin.utils.netbase import Addr, Peer
+from pbcoin.netmessage import ConnectionCode, Errno, Message
 from pbcoin.logger import getLogger
 from pbcoin.trx import Coin, Trx
 if TYPE_CHECKING:
