@@ -1,5 +1,3 @@
-# TODO: net.py will be replaced by this module
-
 from __future__ import annotations
 
 import asyncio
@@ -7,7 +5,6 @@ from copy import deepcopy
 from json import JSONDecodeError
 import random
 from typing import (
-    Any,
     Dict,
     Generator,
     Iterable,
@@ -17,8 +14,8 @@ from typing import (
     TYPE_CHECKING
 )
 
-from pbcoin.block import Block
 import pbcoin.config as conf
+from pbcoin.blockchain import BlockChain
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
 from pbcoin.logger import getLogger, log_error_message
 from pbcoin.netmessage import ConnectionCode, Errno, Message
@@ -29,9 +26,9 @@ from pbcoin.utils.netbase import (
     Connection,
     Peer
 )
-from pbcoin.process_handler import ProcessingHandler
-from .blockchain import BlockChain
 if TYPE_CHECKING:
+    from pbcoin.block import Block
+    from pbcoin.process_handler import ProcessingHandler
     from pbcoin.trx import Trx
     from pbcoin.wallet import Wallet
 
@@ -46,11 +43,10 @@ class Node(Connection):
         super().__init__(addr, timeout)
         self.is_listening = False
         self.neighbors: Dict[str, Tuple[str, int]] = dict()
-        self.connected: Dict[str, str] = dict()
         self.tasks = []  # save all tasks that process message
         # TODO: use kinda combination of OrderedSet & Queue to store last message and in process_handler doesn't use direct write or read
         self.proc_handler = proc_handler
-        
+
     async def handle_peer(self, reader: AsyncReader, writer: AsyncWriter):
         """ this is a callback method that
         handles requests data that receive from other nodes"""
@@ -69,13 +65,15 @@ class Node(Connection):
             error = Message(False, Errno.BAD_MESSAGE, peer.addr)
             await self.write(peer.writer, error.create_message(self.addr))
             return
-        except:
+        except Exception:
             logging.error("Something wrong in parsing message", exec_info=True)
             return
         logging.debug('receive data: ' + data)
-        peer.addr = message.addr  # TODO: maybe it's better right check for pub_key 
+        peer.addr = message.addr  # TODO: maybe it's better right check for pub_key
         if not conf.settings.glob.debug:
-            self.tasks.append(asyncio.create_task(self.proc_handler.handle(message, peer, self)))
+            self.tasks.append(
+                asyncio.create_task(self.proc_handler.handle(message, peer, self))
+            )
         else:
             #! TODO: just uses for debug and should be deleted after implementing handler
             task = asyncio.create_task(self.proc_handler.handle(message, peer, self))
@@ -114,8 +112,7 @@ class Node(Connection):
             return True
         else:
             return False
-        
-        
+
     def is_my_neighbor(self, addr: Addr) -> bool:
         return self.neighbors.get(addr.pub_key, None) is not None
 
@@ -124,7 +121,7 @@ class Node(Connection):
 
     def has_capacity_neighbors(self):
         return len(self.neighbors) == TOTAL_NUMBER_CONNECTIONS
-    
+
     def iter_neighbors(self, forbidden: Iterable[str] = [], shuffle = True) -> Generator:
         copy_neighbors_pub_key = deepcopy(list(self.neighbors.keys()))
         if shuffle:
@@ -154,9 +151,10 @@ class Node(Connection):
         for seed in seeds:
             request = Message(status=True,
                               type_=ConnectionCode.NEW_NEIGHBORS_REQUEST,
-                              addr=seed).create_data(n_connections = TOTAL_NUMBER_CONNECTIONS,
-                                                     p2p_nodes = [],
-                                                     passed_nodes = [self.addr.hostname])
+                              addr=seed)
+            request = request.create_data(n_connections = TOTAL_NUMBER_CONNECTIONS,
+                                          p2p_nodes = [],
+                                          passed_nodes = [self.addr.hostname])
             response = await self.connect_and_send(seed, request.create_message(self.addr), wait_for_receive=True)
             response = Message.from_str(response.decode())
             if not response.status:
@@ -167,19 +165,19 @@ class Node(Connection):
                 continue
             nodes += Addr.convert_to_addr_list(response.data['p2p_nodes'])
             # checking find all neighbors
-            if (response.status == True
+            if (response.status is True
                 and response.type_ == ConnectionCode.NEW_NEIGHBORS_FIND
                 and response.data['n_connections'] == 0
-            ):
+                ):
                 break
 
         # sending found nodes for requesting neighbors
         for node in nodes:
             final_request = Message(True,
                                     ConnectionCode.NEW_NEIGHBOR,
-                                    node).create_data(new_node = self.addr.hostname,
+                                    node)
+            final_request = final_request.create_data(new_node = self.addr.hostname,
                                                       new_pub_key = self.addr.pub_key)
-            # TODO: Get the ok message without waiting
             response = await self.connect_and_send(node, final_request.create_message(self.addr), wait_for_receive=True)
             response = Message.from_str(response.decode())
             if response.status:
@@ -234,9 +232,7 @@ class Node(Connection):
 
     async def send_new_trx(self, trx: Trx, wallet: Wallet):
         """declare other neighbors new transaction for adding to mempool"""
-        message = Message(True,
-                          ConnectionCode.ADD_TRX,
-                          None)
+        message = Message(True, ConnectionCode.ADD_TRX, None)
         message = message.create_data(trx = trx.get_data(with_hash=True),
                                       signature = wallet.base64Sign(trx),
                                       public_key = wallet.public_key,
@@ -248,7 +244,8 @@ class Node(Connection):
             response = await self.connect_and_send(dst_addr,
                                                    message.create_message(self.addr),
                                                    True)
-            if response is None: continue
+            if response is None:
+                continue
             try:
                 response = Message.from_str(response.decode())
             except:
@@ -267,9 +264,10 @@ class Node(Connection):
         request = Message(True, ConnectionCode.PING_PONG, dst_addr)
         try:
             rec = await self.connect_and_send(dst_addr,
-                                                request.create_message(self.addr),
-                                                wait_for_receive=True)
-            if rec == None: return False
+                                              request.create_message(self.addr),
+                                              wait_for_receive=True)
+            if rec is None:
+                return False
             rec = Message.from_str(rec.decode())
             if not rec.status:
                 log_error_message(logging,

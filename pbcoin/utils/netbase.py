@@ -11,8 +11,9 @@ from typing import (
 )
 
 import pbcoin.config as conf
-from pbcoin.constants import NETWORK_DATA_SIZE, TIMEOUT
+from pbcoin.constants import NETWORK_DATA_SIZE
 from pbcoin.logger import getLogger
+
 
 logging = getLogger(__name__)
 
@@ -30,19 +31,19 @@ class Addr:
     def from_hostname(hostname: str, pub_key=None):
         ip, port = hostname.split(":")
         return Addr(ip=ip, port=int(port), pub_key=pub_key)
-    
+
     @property
     def hostname(self): return f"{self.ip}:{self.port}"
 
     @staticmethod
-    def convert_to_addr_list(l: List[str]):
-        return list(map(Addr.from_hostname, l))
-    
+    def convert_to_addr_list(addr_list: List[str]):
+        return list(map(Addr.from_hostname, addr_list))
+
     def __str__(self) -> str:
         if self.pub_key is None:
             return self.hostname
         return self.hostname + ":" + self.pub_key
-    
+
     def __hash__(self) -> int:
         return hash(self.__str__())
 
@@ -51,35 +52,35 @@ class Addr:
 
 
 class Connection:
+    """The base class that is used for connecting other peer or nodes"""
     def __init__(self, addr: Addr, timeout: Optional[float] = None):
         self.addr = addr
         if not self.addr:
             self.addr = Addr(ip=conf.settings.network.ip, port=conf.settings.network.port, pub_key=None)
         self.timeout = timeout
-    
-    async def connect_to(self, src_addr: Addr) -> Peer:
-        """make a connection to destination addr and return stream reader and writer"""
+
+    async def connect_to(self, dst_addr: Addr) -> Peer:
+        """make a connection to destination dst_addr and return peer as Peer object"""
         try:
             # TODO: add timeout
-            reader, writer = await asyncio.open_connection(src_addr.ip, src_addr.port)
-            logging.debug(f"from {self.addr.hostname} Connect to {src_addr.hostname}")
-            peer = Peer(addr=src_addr,
-                                    writer=writer,
-                                    reader=reader,
-                                    is_connected=True)
+            reader, writer = await asyncio.open_connection(dst_addr.ip, dst_addr.port)
+            logging.debug(f"from {self.addr.hostname} Connect to {dst_addr.hostname}")
+            peer = Peer(addr=dst_addr,
+                        writer=writer,
+                        reader=reader,
+                        is_connected=True)
         except asyncio.TimeoutError:
-            logging.debug(f"Timeout Error connect to {src_addr}")
+            logging.debug(f"Timeout Error connect to {dst_addr}")
             return None
-        except ConnectionError as e:
-            logging.error(f"Connection Error to {src_addr}", exc_info=True)
+        except (ConnectionError, OSError):
+            logging.error(f"Connection Error to {dst_addr}", exc_info=True)
             return None
         except Exception as e:
-            logging.error(f"Error", exc_info=True)
-            return None
+            raise
         return peer
 
     async def connect_and_send(self,
-                               src_addr: Addr,
+                               dst_addr: Addr,
                                data: str,
                                wait_for_receive=True
     ) -> Optional[bytes]:
@@ -87,7 +88,7 @@ class Connection:
         is True wait to recieve data from destination and return data"""
         rec_data = b''
         # try to connect
-        peer = await self.connect_to(src_addr)
+        peer = await self.connect_to(dst_addr)
         if peer is None:
             return None
         # write the data
@@ -100,14 +101,9 @@ class Connection:
             if rec_data is None:
                 return None
             logging.debug(
-                f'receive data from {src_addr.hostname} {rec_data.decode()}')
+                f'receive data from {dst_addr.hostname} {rec_data.decode()}')
             # await self.disconnected_from(f"{src_addr.hostname}")
         return rec_data
-
-    async def disconnected_from(self, addr: Addr, wait_to_close=True):
-        # TODO: I think this method is not unnecessary
-        peer = self.connected.pop(addr.hostname)
-        peer.disconnect(wait_to_close)
 
     async def write(self,
                     writer: AsyncWriter,
@@ -115,12 +111,13 @@ class Connection:
                     addr: Optional[Addr] = None,
                     flush: bool = True
     ) -> Optional[Exception]:
-        """write data from writer to destination and if successfully return true
-        otherwise return False
+        """write data from writer to destination and if successfully return None
+        otherwise return Error
         """
-        if writer is None : return Exception("Pass a non writable handler")
-        sizeof = lambda input_data : '{:>08d}'.format(getsizeof(input_data)).encode()
-               
+        if writer is None:
+            return Exception("Pass a non writable handler")
+        def sizeof(input_data):
+            return '{:>08d}'.format(getsizeof(input_data)).encode()
         if isinstance(data, str):
             data = data.encode()
         try:
@@ -132,7 +129,7 @@ class Connection:
             if addr is None:
                 logging.error(f"Could not write message to {addr}", exc_info=True)
             else:
-                logging.error(f"Could not write message", exc_info=True)
+                logging.error("Could not write message", exc_info=True)
             return e
         return None
 
@@ -140,21 +137,21 @@ class Connection:
         """read data from reader if successfully return the data in bytes type
         otherwise return empty bytes
         """
-        if reader is None : return None
+        if reader is None:
+            return None
         data = b''
         try:
             size_data = await reader.read(NETWORK_DATA_SIZE)
             size_data = int(size_data)
             data = await reader.read(size_data)
-        except Exception as e:
+        except Exception:
             if addr is not None:
                 logging.error(f"Could not read message from {addr}", exc_info=True)
             else:
-                logging.error(f"Could not read message", exc_info=True)
+                logging.error("Could not read message", exc_info=True)
             return data
         return data
 
-    # TODO: implement reset and close without waiting
     async def reset(self, close=True):
         """delete its neighbors and close the listening too"""
         self.neighbors = dict()
@@ -167,6 +164,7 @@ class Connection:
 
 @dataclass
 class Peer:
+    """To keep information connected peer"""
     addr: Addr
     writer: Optional[AsyncWriter]
     reader: Optional[AsyncReader]

@@ -24,22 +24,20 @@ logging = getLogger(__name__)
 
 
 class ProcessingHandler:
+    """This class is for handling request of other peers
+    
+    Attributes
+    ----------
+        - blockchain
+        - unspent_coins
+        - wallet
+        - mempool
+    """
     def __init__(self, blockchain: BlockChain, unspent_coins: Dict[str, Coin], wallet: Wallet, mempool: Mempool):
         self.blockchain = blockchain
         self.unspent_coins = unspent_coins
         self.wallet = wallet
         self.mempool = mempool
-        self._threads = []
-
-    def _run_in_thread(self, func, *args):
-        def between_callback(func, *args):
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(func(*args))
-            loop.close()
-        t = threading.Thread(target=between_callback, args=[func, *args])
-        self._threads.append(t)
-        t.start()
         
     async def handle(self, *args) -> bool:
         message = args[0]
@@ -50,8 +48,6 @@ class ProcessingHandler:
             await self.handle_new_neighbor(*args)
         elif message.type_ == ConnectionCode.NEW_NEIGHBORS_REQUEST:
             await self.handle_request_new_node(*args)
-        elif message.type_ == ConnectionCode.NEW_NEIGHBORS_FIND:
-            await self.handle_found_neighbors(*args)
         elif message.type_ == ConnectionCode.NOT_NEIGHBOR:
             await self.handle_delete_neighbor(*args)
         elif message.type_ == ConnectionCode.MINED_BLOCK:
@@ -60,8 +56,6 @@ class ProcessingHandler:
             await self.handle_resolve_blockchain(*args)
         elif message.type_ == ConnectionCode.GET_BLOCKS:
             await self.handle_get_blocks(*args)
-        elif message.type_ == ConnectionCode.SEND_BLOCKS:
-            await self.handle_send_blocks(*args)
         elif message.type_ == ConnectionCode.ADD_TRX:
             await self.handle_new_trx(*args)
         elif message.type_ == ConnectionCode.PING_PONG:
@@ -105,7 +99,7 @@ class ProcessingHandler:
         if n_connections != 0:
             # prepare message to send other nodes for search
             new_request = to_request_other.copy()
-            # TODO: her it is awaiting for each request and ech node play a gather neighbors
+            # TODO: here it is awaiting for each request and ech node play a gather neighbors
             # TODO: it's better we could implement someway that could be connect directly and delete the middlenodes
             for addr in node.iter_neighbors(new_request.data["passed_nodes"]):
                 new_request.addr = addr
@@ -161,9 +155,6 @@ class ProcessingHandler:
         await node.write(peer.writer,
                                    final_request.create_message(node.addr),
                                    message.addr)
-    
-    async def handle_found_neighbors(self, message: Message, peer: Peer, node: Node):
-        raise NotImplementedError("This method is not used!")
 
     async def handle_delete_neighbor(self, message: Message, peer: Peer, node: Node):
         # TODO: send the result with nonblock
@@ -270,9 +261,6 @@ class ProcessingHandler:
                               ConnectionCode.SEND_BLOCKS,
                               message.addr).create_data(blocks=blocks)
         await node.write(peer.writer, request.create_message(node.addr), False)
-
-    def handle_send_blocks(self, message: Message, peer: Peer, node: Node):
-        raise NotImplementedError("This method is not implemented yet!")
 
     async def handle_new_trx(self, message: Message, peer: Peer, node: Node):
         message.data['passed_nodes'].append(node.addr.hostname)

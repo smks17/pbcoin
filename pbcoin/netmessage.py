@@ -10,6 +10,7 @@ from pbcoin.utils.netbase import Addr
 
 logging = getLogger(__name__)
 
+
 class ConnectionCode(IntEnum):
     OK_MESSAGE = auto()  # for ok reply to request
     NEW_NEIGHBOR = auto()  # send information node as a new neighbors
@@ -27,7 +28,8 @@ class Errno(IntEnum):
     BAD_MESSAGE = auto()  # message could not be parsed or isn't standard
     BAD_TYPE_MESSAGE = auto()  # message type is not from ConnectionCode
     BAD_BLOCK_VALIDATION = auto()  # the block(s) that were sended has problem
-    BAD_TRANSACTION = auto()  # the transaction(s) that were received has problem 
+    BAD_TRANSACTION = auto()  # the transaction(s) that were received has problem
+
 
 class Message:
     status: bool
@@ -47,6 +49,7 @@ class Message:
         self.data = data
 
     def create_message(self, my_addr: Addr):
+        """gather info and convert it to bytes array"""
         base_data = {
             "status": self.status,
             "type": self.type_,
@@ -63,7 +66,7 @@ class Message:
         src_addr = Addr.from_hostname(copy_data["src_addr"])
         src_addr.pub_key = copy_data["pub_key"]
         status = copy_data["status"]
-        if status == True:
+        if status is True:
             type = ConnectionCode(copy_data["type"])
         else:
             type = Errno(copy_data["type"])
@@ -76,8 +79,9 @@ class Message:
     @staticmethod
     def from_str(data: str) -> Message:
         return Message.from_dict(json.loads(data))
-            
+
     def create_data(self, **kwargs):
+        """set and check extra data that is diffrent for every code message"""
         try:
             if not self.status:
                 if self.type_ == Errno.BAD_MESSAGE:
@@ -96,9 +100,12 @@ class Message:
                 }
             elif self.type_ == ConnectionCode.NEW_NEIGHBORS_REQUEST:
                 self.data = {
-                    "n_connections": kwargs["n_connections"],  # how many neighbors you want
-                    "p2p_nodes": kwargs["p2p_nodes"],  # nodes that are util found
-                    "passed_nodes": kwargs["passed_nodes"] # this request passes from what nodes for searching
+                    # how many neighbors you want
+                    "n_connections": kwargs["n_connections"],
+                    # nodes that are util found
+                    "p2p_nodes": kwargs["p2p_nodes"],
+                    # this request passes from what nodes for searching
+                    "passed_nodes": kwargs["passed_nodes"]
                 }
             elif self.type_ == ConnectionCode.NEW_NEIGHBORS_FIND:
                 self.data = {
@@ -132,8 +139,8 @@ class Message:
                              "passed_nodes": kwargs["passed_nodes"]}
             elif self.type_ == ConnectionCode.PING_PONG:
                 self.data = None
-        except KeyError as e:
-            logging.error("Bad kwargs for creating message data", exec_info = True)
+        except KeyError:
+            logging.error("Bad kwargs for creating message data", exec_info=True)
         return self
 
     def copy(self) -> Message:
