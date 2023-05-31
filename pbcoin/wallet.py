@@ -12,7 +12,7 @@ import pbcoin.config as conf
 if TYPE_CHECKING:
     from pbcoin.blockchain import BlockChain
     from pbcoin.mempool import Mempool
-    from pbcoin.net import Node
+    from pbcoin.network import Node
 
 from .trx import Trx, Coin
 import pbcoin.core as core
@@ -66,9 +66,10 @@ class Wallet:
     async def send_coin(self,
                         recipient: str,
                         value: float,
-                        mempool: Optional[Mempool],  # just uses for unittest
-                        blockchain: Optional[BlockChain],  # just uses for unittest
-                        node: Optional[Node]  # just uses for unittest
+                        mempool: Optional[Mempool] = None,  # just uses for unittest
+                        blockchain: Optional[BlockChain] = None,  # just uses for unittest
+                        node: Optional[Node] = None,  # just uses for unittest
+                        unspent_coins: Optional[Dict[str, Coin]] = None
     ) -> bool:
         """make a transaction to send coins and publish trx to the network"""
         if mempool is None:
@@ -76,17 +77,22 @@ class Wallet:
         if blockchain is None:
             blockchain = core.BLOCK_CHAIN
         if node is None:
-            blockchain = core.NETWORK
+            node = core.NETWORK
+        if unspent_coins is None:
+            unspent_coins = core.ALL_OUTPUTS
         # if user have amount for sending
         if value <= self.n_amount:
             made_trx = Trx.make_trx(sum(list(self.out_coins.values()), []),
                                         self.public_key, recipient, value)
             # add to own mempool
-            if not mempool.add_new_transaction(made_trx, self.sign(made_trx), self.walletKey.publicKey()):
+            if not mempool.add_new_transaction(made_trx,
+                                               self.sign(made_trx),
+                                               self.walletKey.publicKey(),
+                                               unspent_coins):
                 return False
             # send to nodes and add to network mempool
             if conf.settings.glob.network:
-                await node.send_new_trx(made_trx)
+                await node.send_new_trx(made_trx, self)
             return True
         else:
             return False
