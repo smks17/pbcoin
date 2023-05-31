@@ -76,9 +76,11 @@ class Block:
         if subsidy is not None:
             self.transactions = [subsidy]
             self.merkle_tree = self.build_merkle_tree()
+            self.has_subsidy = True
         else:
             self.transactions = []
             self.merkle_tree = None
+            self.has_subsidy = False
 
     def add_trx(self, trx_: Trx) -> None:
         """ add new trx without checking to block """
@@ -283,6 +285,10 @@ class Block:
             )
         new_block.transactions = trxList_
         return new_block
+
+    @property
+    def hash_list_trx(self):
+        return [trx.__hash__ for trx in self.transactions]
 
     @property
     def __hash__(self):

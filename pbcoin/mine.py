@@ -1,4 +1,5 @@
-from typing import List, Optional, Union
+from copy import deepcopy
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 import pbcoin.config as conf
 from .block import Block
@@ -6,10 +7,9 @@ from .blockchain import BlockChain
 from .logger import getLogger
 from .mempool import Mempool
 from .network import Node
-from .trx import Trx
+from .trx import Coin, Trx
 from .wallet import Wallet
 import pbcoin.core as core
-
 
 logging = getLogger(__name__)
 
@@ -57,7 +57,7 @@ class Mine:
     async def mine(
         self,
         setup_block: Optional[Block] = None,
-        unspent_coins = None,  # almost just for unittest
+        unspent_coins: Optional[Dict[str, List[Coin]]] = None,  # almost just for unittest
         add_block = True,
         difficulty: Optional[int] = None,  # almost just for unittest
         send_network: Optional[bool] = None  # almost just for unittest
@@ -71,6 +71,8 @@ class Mine:
             the specific block to find its nonce and
             send to other nodes. If it is None then get
             from blockchain object
+        unspent_coins: Optional[Dict[str, List[Coin]]] = None
+            all the output coins
         add_block: bool = True
             if True then add the mined block to the blockchain
         difficulty: int
@@ -80,6 +82,8 @@ class Mine:
             difficulty = conf.settings.glob.difficulty
         if send_network is None:
             send_network = conf.settings.glob.network
+        if unspent_coins is None:
+            unspent_coins = core.ALL_OUTPUTS
 
         if setup_block is not None:
             self.setup_block = setup_block
@@ -95,6 +99,9 @@ class Mine:
         else:
             last_n = self.blockchain.height
         logging.debug("start again mine")
+        transactions_mining = deepcopy(self.setup_block.transactions)
+        if self.setup_block.has_subsidy:
+            transactions_mining.pop(0)  # pop subsidy
         while not self.check_add_block(last_n):
             if self.start_over:
                 break
@@ -102,6 +109,12 @@ class Mine:
                 self.setup_block.set_nonce(0)
             if self.stop_mining:
                 continue
+            if transactions_mining != self.mempool == 0:
+                for trx in self.mempool:
+                    if not trx in transactions_mining:
+                        self.setup_block.add_trx(trx)
+                transactions_mining = self.setup_block.transactions
+                transactions_mining.pop(0)  # pop subsidy
             self.setup_block.set_mined()
             # calculate hash and check difficulty
             if int(self.setup_block.calculate_hash(), 16) <= difficulty:
@@ -123,7 +136,7 @@ class Mine:
                 self.blockchain.append(self.setup_block)
                 logging.debug("New blockchain: ",
                             [block.__hash__ for block in self.blockchain])
-            self.mempool.remove_transactions()
+            self.mempool.remove_transactions(self.setup_block.hash_list_trx)
 
     def check_add_block(self, last_n: int):
         """check now blockchain height with last_n"""

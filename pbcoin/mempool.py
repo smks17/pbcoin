@@ -78,9 +78,10 @@ class Mempool:
             self.in_mining_block.remove(trx_hash)
             return True
 
-    def remove_transactions(self) -> bool:
+    def remove_transactions(self, list_trx: List[Trx]) -> bool:
         for trx_hash in self.in_mining_block:
-            self.remove_transaction(trx_hash)
+            if trx_hash in list_trx:
+                self.remove_transaction(trx_hash)
 
     def is_exist(self, trx_hash):
         return trx_hash in self.transactions
