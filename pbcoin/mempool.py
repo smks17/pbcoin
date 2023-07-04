@@ -7,8 +7,8 @@ from ellipticcurve.ecdsa import Ecdsa
 from ellipticcurve.publicKey import PublicKey
 from ellipticcurve.signature import Signature
 
-from .block import Block
-from .trx import Coin, Trx
+from pbcoin.trx import Coin, Trx
+
 
 class Mempool:
     """ A mempool class to save and handle new transaction for adding to mempool
@@ -24,7 +24,7 @@ class Mempool:
     """
     def __init__(self, max_limit_trx: Optional[int] = None):
         if max_limit_trx is None:
-            self.max_limit_trx = 10 #TODO
+            self.max_limit_trx = 10  #TODO
         else:
             self.max_limit_trx = max_limit_trx
         # all transactions that is exist in mempool (even in block that is mining)
@@ -43,7 +43,7 @@ class Mempool:
     def add_new_transaction(self, trx: Trx, sig: Signature, pub_key: PublicKey,
                             unspent_coins: Dict[str, Coin]) -> bool:
         """add a new transaction to the all mempool transaction and the queue for mining block
-        
+
         Args
         ----
         trx: Trx
@@ -102,7 +102,7 @@ class Mempool:
     def __getattr__(self, item: str):
         assert isinstance(item, str)
         return deepcopy(self.transactions[item])
-    
+
     def __iter__(self):
         for trx in self.in_mining_block:
             yield self.transactions[trx]

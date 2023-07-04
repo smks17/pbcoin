@@ -24,6 +24,7 @@ class ConnectionCode(IntEnum):
     ADD_TRX = auto()  # new trx for add to mempool
     PING_PONG = auto()  # For pinging other nodes and check connection
 
+
 class Errno(IntEnum):
     BAD_MESSAGE = auto()  # message could not be parsed or isn't standard
     BAD_TYPE_MESSAGE = auto()  # message type is not from ConnectionCode
@@ -41,8 +42,7 @@ class Message:
                  status: bool,
                  type_: Union[ConnectionCode, Errno],
                  addr: Addr,
-                 data: Optional[Dict[str, Any]] = None
-    ):
+                 data: Optional[Dict[str, Any]] = None):
         self.status = status
         self.type_ = type_
         self.addr = addr

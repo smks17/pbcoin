@@ -9,7 +9,7 @@ from typing import (
     Union
 )
 
-from .constants import *
+from pbcoin.constants import *
 
 
 class GlobalCfg:
@@ -58,6 +58,7 @@ class NetworkCfg():
         cls.cli = option.get("cli", True)
         cls.socket_network = option.get("socket_network", True)
 
+
 class LoggerCfg:
     do_logging: bool = True
     log_format: str = LOGGING_FORMAT
@@ -86,8 +87,9 @@ class Settings:
             # do not error when close task in windows
             # TODO: maybe change close functions
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        
+
     def update(self, option: Dict[str, Any]):
         self.glob.update(option)
+
 
 settings = Settings()

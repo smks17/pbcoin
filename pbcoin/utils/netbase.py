@@ -56,7 +56,9 @@ class Connection:
     def __init__(self, addr: Addr, timeout: Optional[float] = None):
         self.addr = addr
         if not self.addr:
-            self.addr = Addr(ip=conf.settings.network.ip, port=conf.settings.network.port, pub_key=None)
+            self.addr = Addr(ip=conf.settings.network.ip,
+                             port=conf.settings.network.port,
+                             pub_key=None)
         self.timeout = timeout
 
     async def connect_to(self, dst_addr: Addr) -> Peer:
@@ -76,14 +78,13 @@ class Connection:
             logging.error(f"Connection Error to {dst_addr}", exc_info=True)
             return None
         except Exception as e:
-            raise
+            raise e
         return peer
 
     async def connect_and_send(self,
                                dst_addr: Addr,
                                data: str,
-                               wait_for_receive=True
-    ) -> Optional[bytes]:
+                               wait_for_receive=True) -> Optional[bytes]:
         """make a connection to destination addr and send data then if wait_for_receive
         is True wait to recieve data from destination and return data"""
         rec_data = b''
@@ -109,15 +110,16 @@ class Connection:
                     writer: AsyncWriter,
                     data: Union[str, bytes],
                     addr: Optional[Addr] = None,
-                    flush: bool = True
-    ) -> Optional[Exception]:
+                    flush: bool = True) -> Optional[Exception]:
         """write data from writer to destination and if successfully return None
         otherwise return Error
         """
         if writer is None:
             return Exception("Pass a non writable handler")
+
         def sizeof(input_data):
             return '{:>08d}'.format(getsizeof(input_data)).encode()
+
         if isinstance(data, str):
             data = data.encode()
         try:
@@ -174,8 +176,7 @@ class Peer:
                  addr: Optional[Addr] = None,
                  writer: Optional[AsyncWriter] = None,
                  reader: Optional[AsyncReader] = None,
-                 is_connected: bool = True
-    ):
+                 is_connected: bool = True):
         self.addr = addr
         self.writer = writer
         self.reader = reader

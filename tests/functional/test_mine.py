@@ -8,6 +8,7 @@ from pbcoin.mempool import Mempool
 from pbcoin.mine import Mine
 from pbcoin.trx import Coin, Trx
 
+
 class TestTrx:
     DIFFICULTY = (2 ** 512 - 1) >> (2)
 
@@ -26,7 +27,8 @@ class TestTrx:
         self.__class__.blockchain = BlockChain(blockchain)
         last_block = self.__class__.blockchain.last_block
         assert self.__class__.blockchain.height > 0, "Didn't mine anything"
-        assert self.__class__.blockchain.last_block != None, "Didn't save the mined block"
+        assert self.__class__.blockchain.last_block is not None, \
+               "Didn't save the mined block"
         assert last_block.block_height == n
 
     @pytest.mark.parametrize("mine_some_blocks", [1, 2], indirect=True)
@@ -50,7 +52,9 @@ class TestTrx:
         # mine one block with no transaction
         new_block = blockchain.setup_new_block(Trx(1, public_key.toString()), mempool)
         await miner.mine(new_block, add_block=False, difficulty=self.DIFFICULTY)
-        blockchain.add_new_block(new_block, unspent_coins=unspent_coins, difficulty = self.DIFFICULTY)
+        blockchain.add_new_block(new_block,
+                                 unspent_coins=unspent_coins,
+                                 difficulty=self.DIFFICULTY)
         # make a new transaction for testing mining one block
         new_trx = Trx(
             2,
@@ -72,7 +76,10 @@ class TestTrx:
         # mine second block with new transaction and check it
         new_block = blockchain.setup_new_block(Trx(2, public_key.toString()), miner.mempool)
         await miner.mine(new_block, add_block=False, difficulty=self.DIFFICULTY)
-        blockchain.add_new_block(new_block, ignore_validation=True, unspent_coins=unspent_coins, difficulty = self.DIFFICULTY)
+        blockchain.add_new_block(new_block,
+                                 ignore_validation=True,
+                                 unspent_coins=unspent_coins,
+                                 difficulty=self.DIFFICULTY)
         assert len(blockchain.blocks) == 2, "Could not Mine new block"
         last_block = blockchain.last_block
         assert len(last_block.transactions) == 2, "Transactions didn't add to mined block"
@@ -88,18 +95,16 @@ class TestTrx:
         assert last_block.transactions[1].inputs == actual_inputs, "Bad input transaction"
         assert len(miner.mempool) == 0, "Didn't delete mempool transaction that was mined"
 
-        new_trx = [Trx(
-            3,
-            public_key.toString(),
-            [blockchain.last_block.transactions[-1].outputs[0]],
-            [Coin("fake2", 1, value_=30)]
-        ),
-        Trx(
-            3,
-            public_key.toString(),
-            [blockchain.last_block.transactions[-1].outputs[1]],
-            [Coin("fake1", 1, value_=20)]
-        )]
+        new_trx = [
+            Trx(3,
+                public_key.toString(),
+                [blockchain.last_block.transactions[-1].outputs[0]],
+                [Coin("fake2", 1, value_=30)]),
+            Trx(3,
+                public_key.toString(),
+                [blockchain.last_block.transactions[-1].outputs[1]],
+                [Coin("fake1", 1, value_=20)])
+        ]
         mempool.max_limit_trx = 1
         # add new transaction to mempool and check it
         for trx in new_trx:

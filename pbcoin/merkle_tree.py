@@ -35,14 +35,14 @@ class MerkleTreeNode:
 
     def compute_hash(self):
         """calculate parents hash"""
-        if self.left == None:  # if left is none so right is none too
+        if self.left is None:  # if left is none so right is none too
             return self.hash
         child_hash = self.left.compute_hash() + self.right.compute_hash()
         self.hash = sha256(child_hash.encode()).hexdigest()
         return self.hash
 
     def find_leaves(self):
-        if self.left == None:
+        if self.left is None:
             return [self]
         leaves = self.left.find_leaves() + self.right.find_leaves()
         return leaves
@@ -96,7 +96,7 @@ class MerkleTreeNode:
                 index: int
                     if it is not None means that don't need find the leaf and
                     uses the index for find the leaf
-            
+
             return
             ------
             list[str]:
@@ -112,7 +112,7 @@ class MerkleTreeNode:
             hashes.append(leaf.hash)
             parent = leaf.parent
             current = leaf
-            while parent != None:
+            while parent is not None:
                 if current.hash == parent.left.hash:
                     hashes.append(parent.right.hash)
                     bits.append(1)
@@ -126,7 +126,7 @@ class MerkleTreeNode:
             bits.append(1)
             return hashes, bits
 
-        if index == None:
+        if index is None:
             for leaf in leaves:
                 if leaf.hash == key_hash:
                     return trace(leaf)

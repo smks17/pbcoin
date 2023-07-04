@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from pbcoin.mempool import Mempool
     from pbcoin.network import Node
 
-from .trx import Trx, Coin
+from pbcoin.trx import Trx, Coin
 import pbcoin.core as core
 
 #TODO: separate wallet from node
@@ -27,7 +27,7 @@ class Wallet:
     name = f"Wallet-{int(random()*1000)}"
 
     def __init__(self, key=None):
-        if key != None:
+        if key is not None:
             # TODO: check keys
             # TODO: trace for find amount of wallet
             pass
@@ -52,7 +52,7 @@ class Wallet:
             for in_coin in trx.inputs:
                 if in_coin.owner == self.public_key:
                     self.out_coins[in_coin.trx_hash].remove(in_coin)
-                    self.n_amount -= out_coin.value  # TODO: check nAmount
+                    self.n_amount -= in_coin.value  # TODO: check nAmount
 
             for out_coin in trx.outputs:
                 if out_coin.owner == self.public_key:
@@ -69,8 +69,7 @@ class Wallet:
                         mempool: Optional[Mempool] = None,  # just uses for unittest
                         blockchain: Optional[BlockChain] = None,  # just uses for unittest
                         node: Optional[Node] = None,  # just uses for unittest
-                        unspent_coins: Optional[Dict[str, Coin]] = None
-    ) -> bool:
+                        unspent_coins: Optional[Dict[str, Coin]] = None) -> bool:
         """make a transaction to send coins and publish trx to the network"""
         if mempool is None:
             mempool = core.MEMPOOL
@@ -83,7 +82,7 @@ class Wallet:
         # if user have amount for sending
         if value <= self.n_amount:
             made_trx = Trx.make_trx(sum(list(self.out_coins.values()), []),
-                                        self.public_key, recipient, value)
+                                    self.public_key, recipient, value)
             # add to own mempool
             if not mempool.add_new_transaction(made_trx,
                                                self.sign(made_trx),

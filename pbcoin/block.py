@@ -10,8 +10,8 @@ from sys import getsizeof
 from typing import Any, Dict, Optional
 
 import pbcoin.config as conf
-from .merkle_tree import MerkleTreeNode
-from .trx import Coin, Trx
+from pbcoin.merkle_tree import MerkleTreeNode
+from pbcoin.trx import Coin, Trx
 
 
 class BlockValidationLevel(Flag):
@@ -179,7 +179,7 @@ class Block:
 
         # check previous hash
         if self.previous_hash == pre_hash:
-                valid = valid | BlockValidationLevel.PREVIOUS_HASH
+            valid = valid | BlockValidationLevel.PREVIOUS_HASH
 
         return valid
 
@@ -196,13 +196,13 @@ class Block:
                 header:
                 - hash: block hash
                 - height: block height (number of blocks before this block)
-                - nonce: 
+                - nonce:
                 - number trx: number of transactions in this block
                 - merkle_root: merkle tree root hash of transactions
                 - trx_hashes: list of transactions hash
                 - previous_hash
                 - time: the time is mined
-                
+
                 other:
                 - trx: list of all block transactions
                 - size: size of data (block)
@@ -266,23 +266,17 @@ class Block:
             for coin_idx, in_coin in enumerate(each_trx['inputs']):
                 inputs.append(
                     Coin(in_coin['owner'],
-                        coin_idx,
-                        in_coin['trx_hash'],
-                        in_coin['value']
-                    )
-                )
+                         coin_idx,
+                         in_coin['trx_hash'],
+                         in_coin['value']))
             outputs = []
             for coin_idx, out_coin in enumerate(each_trx['outputs']):
                 outputs.append(
                     Coin(out_coin['owner'],
-                        coin_idx,
-                        out_coin['trx_hash'],
-                        out_coin['value']
-                    )
-                )
-            trxList_.append(
-                Trx(new_block.block_height, "", inputs, outputs, each_trx['time'])
-            )
+                         coin_idx,
+                         out_coin['trx_hash'],
+                         out_coin['value']))
+            trxList_.append(Trx(new_block.block_height, "", inputs, outputs, each_trx['time']))
         new_block.transactions = trxList_
         return new_block
 
@@ -292,7 +286,10 @@ class Block:
 
     @property
     def __hash__(self):
-        return self.block_hash if (hasattr(self, 'block_hash') and self.block_hash is not None) else self.calculate_hash()
+        if (hasattr(self, 'block_hash') and self.block_hash is not None):
+            return self.block_hash
+        else:
+            return self.calculate_hash()
 
     def __eq__(self, __o: object) -> bool:
         return __o.__hash__ == self.__hash__

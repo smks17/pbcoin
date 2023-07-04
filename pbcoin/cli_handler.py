@@ -13,12 +13,13 @@ if os.name == 'nt':
     import win32file
 
 import pbcoin.core as core
-from .constants import PIPE_BUFFER_SIZE
-from .cliflag import CliErrorCode, CliCommandCode
-from .logger import getLogger
+from pbcoin.constants import PIPE_BUFFER_SIZE
+from pbcoin.cliflag import CliErrorCode, CliCommandCode
+from pbcoin.logger import getLogger
 
 
 logging = getLogger(__name__)
+
 
 class CliServer():
     def __init__(self, socket_path_) -> None:
@@ -27,13 +28,15 @@ class CliServer():
         but for windows os is a path to pipe socket like: '//./pipe/node_socket'
         """
         try:
-            self.is_unix = socket.AF_UNIX != None
+            self.is_unix = socket.AF_UNIX is not None
             self.socket_path = socket_path_
         except:
             self.is_unix = False
             self.pipe_path = socket_path_
 
-    async def handle_cli_command_unix(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    async def handle_cli_command_unix(self,
+                                      reader: asyncio.StreamReader,
+                                      writer: asyncio.StreamWriter):
         """handle the user input cli from receive data UNIX socket"""
         recv = await reader.readuntil(b'\n')
         recv = recv.decode()
@@ -87,14 +90,14 @@ class CliServer():
                 pipe = win32pipe.CreateNamedPipe(
                     self.pipe_path,
                     win32pipe.PIPE_ACCESS_DUPLEX,
-                    win32pipe.PIPE_TYPE_MESSAGE |win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_NOWAIT,
+                    win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_NOWAIT,
                     win32pipe.PIPE_UNLIMITED_INSTANCES,  # nMaxInstances
                     PIPE_BUFFER_SIZE,  # nOutBufferSize
                     PIPE_BUFFER_SIZE,  # nInBufferSize
-                    win32pipe.NMPWAIT_USE_DEFAULT_WAIT, # 50ms timeout (the default)
-                    None # securityAttributes
+                    win32pipe.NMPWAIT_USE_DEFAULT_WAIT,  # 50ms timeout (the default)
+                    None  # securityAttributes
                 )
-                if pipe == None:
+                if pipe is None:
                     raise Exception()
                 try:
                     win32pipe.ConnectNamedPipe(pipe, None)
@@ -136,7 +139,8 @@ class CliServer():
                 else:
                     index_block = core.BLOCK_CHAIN.search(args[0])
                     if index_block:
-                        block_data = core.BLOCK_CHAIN.blocks[index_block].getData(is_POSIX_timestamp=False)
+                        b = core.BLOCK_CHAIN.blocks[index_block]
+                        block_data = b.getData(is_POSIX_timestamp=False)
                         result += json.dumps(block_data)
                     else:
                         errors |= CliErrorCode.NOT_FOUND
@@ -160,7 +164,7 @@ class CliServer():
                 else:
                     errors |= CliErrorCode.MINING_OFF
             elif arg == 'state':
-                state =  "stopped" if core.MINER.stop_mining else "running"
+                state = "stopped" if core.MINER.stop_mining else "running"
                 result += state
             else:
                 errors |= CliErrorCode.BAD_USAGE

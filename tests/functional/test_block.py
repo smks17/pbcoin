@@ -5,6 +5,7 @@ import pytest
 from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.trx import Trx, Coin
 
+
 class TestBlock:
     @pytest.fixture
     def setUp_chain_trx(self, request):
@@ -34,7 +35,8 @@ class TestBlock:
         assert block.transactions[0].outputs[0].trx_hash == temp_trx.__hash__, \
             "Problem in output coin trx_hash value"
         assert temp_trx.__hash__ in block.get_list_hashes_trx(), \
-            "Problem in no added new transaction to the block or bad block_hash assign for transaction data"
+            "Problem in no added new transaction to the block or"  \
+            "bad block_hash assign for transaction data"
 
     @pytest.mark.parametrize("setUp_chain_trx", [1, 2, 3], indirect=True)
     def test_update_unspent_coins(self, setUp_chain_trx):
@@ -52,7 +54,7 @@ class TestBlock:
         for block in self.test_blocks:
             assert block.check_trx(unspent_coins), "Problem in validation of transaction"
             block.update_outputs(unspent_coins)
-    
+
     @pytest.mark.parametrize("setUp_chain_trx", [2], indirect=True)
     def test_bad_input_coin_in_block_transaction(self, setUp_chain_trx):
         unspent_coins = dict()
@@ -81,8 +83,10 @@ class TestBlock:
     def test_is_valid_block(self, setUp_chain_trx):
         last_block = self.test_blocks[-1]
         new_block = Block(last_block.previous_hash, len(self.test_blocks) + 1)
-        validation = new_block.is_valid_block(self.unspent_coins, pre_hash=self.test_blocks[-2].__hash__)
-        assert validation == BlockValidationLevel.ALL(except_validations=BlockValidationLevel.DIFFICULTY)
+        pre_hash = self.test_blocks[-2].__hash__
+        validation = new_block.is_valid_block(self.unspent_coins, pre_hash=pre_hash)
+        all = BlockValidationLevel.ALL(except_validations=BlockValidationLevel.DIFFICULTY)
+        assert validation == all
 
     @pytest.mark.parametrize("setUp_chain_trx", [2], indirect=True)
     def test_is_not_valid_block(self, setUp_chain_trx):

@@ -16,8 +16,7 @@ import warnings
 if (sys.platform == 'linux' or
     sys.platform == 'linux2' or
     sys.platform == 'cygwin' or
-    sys.platform == 'darwin'
-):
+    sys.platform == 'darwin'):
     OS_TYPE: Final[str] = 'unix'
 elif sys.platform == 'win32':
     OS_TYPE: Final[str] = 'win'
@@ -45,7 +44,7 @@ FULL_NODE: bool = False
 # Difficult level of hash block which should be less than
 #                       512 bit 1   left first 23 bit set 0
 #                     -----------------------------------
-DIFFICULTY: int = (2 ** 512 - 1) >> (23)
+DIFFICULTY: int = (2 ** 512 - 1) >> (10)
 
 # TODO: could be better it isn't constant
 # the amount of miner prize for mine a block
@@ -69,7 +68,7 @@ PORT: int = 8989
 
 # Seeds are uses for connet to blockchain network
 # and its value format is <IP>:<PORT>
-INIT_SEEDS: List[str] =  []
+INIT_SEEDS: List[str] = []
 
 # How many neighbors (nodes) connect to each node
 TOTAL_NUMBER_CONNECTIONS: Final[int] = 2
@@ -78,7 +77,7 @@ TOTAL_NUMBER_CONNECTIONS: Final[int] = 2
 # specifies the size of actual data
 NETWORK_DATA_SIZE: Final[int] = 8
 
-TIMEOUT = 1 * 60 #s
+TIMEOUT = 1 * 60#s
 
 PIPE_BUFFER_SIZE = 1024 * 4
 
@@ -104,11 +103,10 @@ DO_LOGGING = True
 # Logging format
 LOGGING_FORMAT: str = "%(asctime)s |  %(name)-18s |  %(levelname)-10s: %(message)s"
 
-LOGGING_DATE_FORMAT: str ="%Y-%m-%d %H:%M-%S"
+LOGGING_DATE_FORMAT: str = "%Y-%m-%d %H:%M-%S"
 
 # Change logging level if debug mode is True
 LOGGING_LEVEL: int = logging.INFO
 
 # File for write log
 LOGGING_FILENAME = BASE_PATH / "pbcoin.log"
-

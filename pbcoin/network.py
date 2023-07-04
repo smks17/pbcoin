@@ -44,7 +44,8 @@ class Node(Connection):
         self.is_listening = False
         self.neighbors: Dict[str, Tuple[str, int]] = dict()
         self.tasks = []  # save all tasks that process message
-        # TODO: use kinda combination of OrderedSet & Queue to store last message and in process_handler doesn't use direct write or read
+        # TODO: use kinda combination of OrderedSet & Queue to store last message and
+        #       in process_handler doesn't use direct write or read
         self.proc_handler = proc_handler
 
     async def handle_peer(self, reader: AsyncReader, writer: AsyncWriter):
@@ -128,7 +129,7 @@ class Node(Connection):
             random.shuffle(copy_neighbors_pub_key)
         for pub_key in copy_neighbors_pub_key:
             addr = self.neighbors.get(pub_key)
-            if addr == None:
+            if addr is None:
                 continue  #! It's kinda non reachable at all
             # doesn't send data to the repetitious/forbidden nodes
             # maybe later stuck in a loop
@@ -155,7 +156,9 @@ class Node(Connection):
             request = request.create_data(n_connections = TOTAL_NUMBER_CONNECTIONS,
                                           p2p_nodes = [],
                                           passed_nodes = [self.addr.hostname])
-            response = await self.connect_and_send(seed, request.create_message(self.addr), wait_for_receive=True)
+            response = await self.connect_and_send(seed,
+                                                   request.create_message(self.addr),
+                                                   wait_for_receive=True)
             response = Message.from_str(response.decode())
             if not response.status:
                 log_error_message(logging,
@@ -166,9 +169,8 @@ class Node(Connection):
             nodes += Addr.convert_to_addr_list(response.data['p2p_nodes'])
             # checking find all neighbors
             if (response.status is True
-                and response.type_ == ConnectionCode.NEW_NEIGHBORS_FIND
-                and response.data['n_connections'] == 0
-                ):
+                    and response.type_ == ConnectionCode.NEW_NEIGHBORS_FIND
+                    and response.data['n_connections'] == 0):
                 break
 
         # sending found nodes for requesting neighbors
@@ -178,7 +180,9 @@ class Node(Connection):
                                     node)
             final_request = final_request.create_data(new_node = self.addr.hostname,
                                                       new_pub_key = self.addr.pub_key)
-            response = await self.connect_and_send(node, final_request.create_message(self.addr), wait_for_receive=True)
+            response = await self.connect_and_send(node,
+                                                   final_request.create_message(self.addr),
+                                                   wait_for_receive=True)
             response = Message.from_str(response.decode())
             if response.status:
                 self.add_neighbor(response.addr)
@@ -188,7 +192,8 @@ class Node(Connection):
                     #TODO: resolve blockchain
                     request_blockchain = Message(True, ConnectionCode.GET_BLOCKS, node)
                     request_blockchain.create_data(first_index=0)
-                    rec = await self.connect_and_send(node, request_blockchain.create_message(self.addr))
+                    rec = await self.connect_and_send(node,
+                                                      request_blockchain.create_message(self.addr))
                     rec = Message.from_str(rec.decode())
                     if rec.status:
                         blockchain = BlockChain.json_to_blockchain(rec.data['blocks'])

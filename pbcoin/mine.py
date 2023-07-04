@@ -1,17 +1,18 @@
 from copy import deepcopy
-from typing import TYPE_CHECKING, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import pbcoin.config as conf
-from .block import Block
-from .blockchain import BlockChain
-from .logger import getLogger
-from .mempool import Mempool
-from .network import Node
-from .trx import Coin, Trx
-from .wallet import Wallet
 import pbcoin.core as core
+from pbcoin.block import Block
+from pbcoin.blockchain import BlockChain
+from pbcoin.logger import getLogger
+from pbcoin.mempool import Mempool
+from pbcoin.network import Node
+from pbcoin.trx import Coin, Trx
+from pbcoin.wallet import Wallet
 
 logging = getLogger(__name__)
+
 
 class Mine:
     """
@@ -64,7 +65,7 @@ class Mine:
     ) -> None:
         """Start mining for new block and send to other nodes
         from network if it is setup
-        
+
         Args
         ----
         setup_block: Optional[Block] = None
@@ -111,7 +112,7 @@ class Mine:
                 continue
             if transactions_mining != self.mempool == 0:
                 for trx in self.mempool:
-                    if not trx in transactions_mining:
+                    if trx not in transactions_mining:
                         self.setup_block.add_trx(trx)
                 transactions_mining = self.setup_block.transactions
                 transactions_mining.pop(0)  # pop subsidy
@@ -129,13 +130,15 @@ class Mine:
             if send_network and self.node is not None:
                 await self.node.send_mined_block(self.setup_block)
             if add_block and type(self.blockchain) is BlockChain:
-                self.blockchain.add_new_block(
-                    self.setup_block, ignore_validation=True, unspent_coins=unspent_coins, difficulty=difficulty)
+                self.blockchain.add_new_block(self.setup_block,
+                                              ignore_validation=True,
+                                              unspent_coins=unspent_coins,
+                                              difficulty=difficulty)
                 logging.debug(f"New blockchain: {self.blockchain.get_hashes()}")
             elif add_block:
                 self.blockchain.append(self.setup_block)
                 logging.debug("New blockchain: ",
-                            [block.__hash__ for block in self.blockchain])
+                              [block.__hash__ for block in self.blockchain])
             self.mempool.remove_transactions(self.setup_block.hash_list_trx)
 
     def check_add_block(self, last_n: int):

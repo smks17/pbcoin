@@ -1,7 +1,5 @@
 from __future__ import annotations
-import asyncio
 
-import threading
 from copy import copy, deepcopy
 from typing import TYPE_CHECKING, Dict, Optional
 
@@ -25,7 +23,7 @@ logging = getLogger(__name__)
 
 class ProcessingHandler:
     """This class is for handling request of other peers
-    
+
     Attributes
     ----------
         - blockchain
@@ -33,15 +31,19 @@ class ProcessingHandler:
         - wallet
         - mempool
     """
-    def __init__(self, blockchain: BlockChain, unspent_coins: Dict[str, Coin], wallet: Wallet, mempool: Mempool):
+    def __init__(self,
+                 blockchain: BlockChain,
+                 unspent_coins: Dict[str, Coin],
+                 wallet: Wallet,
+                 mempool: Mempool):
         self.blockchain = blockchain
         self.unspent_coins = unspent_coins
         self.wallet = wallet
         self.mempool = mempool
-        
+
     async def handle(self, *args) -> bool:
         message = args[0]
-        # TODO: Check the structure of message data is correct or not 
+        # TODO: Check the structure of message data is correct or not
         if not message.status:
             self.handle_error()
         if message.type_ == ConnectionCode.NEW_NEIGHBOR:
@@ -76,7 +78,7 @@ class ProcessingHandler:
                                new_node=node.addr.hostname,
                                new_pub_key=node.addr.pub_key)
         await node.write(peer.writer, response.create_message(node.addr), message.addr)
-        
+
     async def handle_request_new_node(self, message: Message, peer: Peer, node: Node):
         """handle a new node for add to the network by finding new neighbors for it"""
         n_connections = int(message.data["n_connections"])
@@ -100,7 +102,8 @@ class ProcessingHandler:
             # prepare message to send other nodes for search
             new_request = to_request_other.copy()
             # TODO: here it is awaiting for each request and ech node play a gather neighbors
-            # TODO: it's better we could implement someway that could be connect directly and delete the middlenodes
+            # TODO: it's better we could implement someway that could be connect
+            #       directly and delete the middle nodes
             for addr in node.iter_neighbors(new_request.data["passed_nodes"]):
                 new_request.addr = addr
                 try:
@@ -111,7 +114,7 @@ class ProcessingHandler:
                     if response is None:
                         continue
                     response = Message.from_str(response.decode())
-                    if response.status == False:
+                    if response.status is False:
                         continue
                     n_connections = response.data["n_connections"]
                     new_nodes |= set(response.data["p2p_nodes"])
@@ -131,12 +134,11 @@ class ProcessingHandler:
             for addr in node.iter_neighbors(forbidden = []):
                 request = Message(status=True,
                                   type_=ConnectionCode.NOT_NEIGHBOR,
-                                  addr=addr
-                          ).create_data(node_hostname=node.addr.hostname,
-                                        pub_key=node.addr.pub_key)
+                                  addr=addr).create_data(node_hostname=node.addr.hostname,
+                                                         pub_key=node.addr.pub_key)
                 response = await node.connect_and_send(addr, request.create_message(node.addr))
                 response = Message.from_str(response.decode())
-                if response.status == True:
+                if response.status is True:
                     node.delete_neighbor(addr)
                     logging.info(f"delete neighbor for {node.addr.hostname} : {addr}")
                     new_nodes = [f"{node.addr.hostname}", f"{addr.hostname}"]
@@ -153,8 +155,8 @@ class ProcessingHandler:
                                     for_node = message.addr.hostname
                                 )
         await node.write(peer.writer,
-                                   final_request.create_message(node.addr),
-                                   message.addr)
+                         final_request.create_message(node.addr),
+                         message.addr)
 
     async def handle_delete_neighbor(self, message: Message, peer: Peer, node: Node):
         # TODO: send the result with nonblock
@@ -172,8 +174,8 @@ class ProcessingHandler:
         else:
             # TODO: make a error message
             response = Message(False, 0, addr)
-        await node.write(peer.writer, response.create_message(node.addr), message.addr) 
-        
+        await node.write(peer.writer, response.create_message(node.addr), message.addr)
+
     async def handle_mined_block(self, message: Message, peer: Peer, node: Node):
         """handle for request finder new block"""
         block_data = message.data
@@ -226,7 +228,7 @@ class ProcessingHandler:
         else:
             # TODO: current blockchain is longer so declare other for resolve that
             logging.error("Not implemented resolve shorter blockchain")
-        
+
     async def handle_resolve_blockchain(self, message: Message, peer: Peer, node: Node):
         blocks = message.data['blocks']
         blocks = [Block.from_json_data_full(block) for block in blocks]
@@ -235,7 +237,7 @@ class ProcessingHandler:
             pass  # TODO: should tell other nodes that blocks have problem
         else:
             ok_msg = Message(True, ConnectionCode.OK_MESSAGE, message.addr)
-            await node.write(peer.writer, ok_msg.create_message(node.addr))            
+            await node.write(peer.writer, ok_msg.create_message(node.addr))
 
     async def handle_get_blocks(self, message: Message, peer: Peer, node: Node):
         """handle for request another node for getting block"""
@@ -247,7 +249,7 @@ class ProcessingHandler:
         else:
             first_index = message.data.pop('first_index', None)
         request = None
-        if first_index == None or first_index > self.blockchain.height:
+        if first_index is None or first_index > self.blockchain.height:
             # doesn't have this specific chain or block(s)
             # TODO: maybe it's good to get from a full node
             logging.debug("doesn't have self chain!")
@@ -294,7 +296,7 @@ class ProcessingHandler:
         if result:
             for pub_key in node.neighbors:
                 dst_addr = node.neighbors[pub_key]
-                if not dst_addr.hostname in message.data['passed_nodes']:
+                if dst_addr.hostname not in message.data['passed_nodes']:
                     copy_msg = message.copy
                     copy_msg.src_addr = self.node.addr
                     copy_msg.dst_addr = dst_addr

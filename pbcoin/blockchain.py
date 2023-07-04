@@ -11,15 +11,15 @@ from typing import (
 )
 
 import pbcoin.config as conf
-from .block import Block, BlockValidationLevel
-from .mempool import Mempool
-from .trx import Coin, Trx
+from pbcoin.block import Block, BlockValidationLevel
+from pbcoin.mempool import Mempool
+from pbcoin.trx import Coin, Trx
 
 
 class BlockChain:
     """
     An in-memory blocks data
-    
+
     Attributes
     ----------
     blocks: List[Block]
@@ -64,7 +64,7 @@ class BlockChain:
             validation = BlockValidationLevel.ALL()
         if validation == BlockValidationLevel.ALL():
             self.blocks.append(deepcopy(block_))
-            if not unspent_coins is None:
+            if unspent_coins is not None:
                 self.last_block.update_outputs(unspent_coins)
         if (not self.is_full_node) and (self.__sizeof__() >= self.cache):
             self.blocks.pop(0)
@@ -90,7 +90,7 @@ class BlockChain:
         Return
         ------
         Tuple[bool, Optional[int]]:
-            return a tuple which the first is to determine does resolving could do or not 
+            return a tuple which the first is to determine does resolving could do or not
             and the second one is the index of block in new_blocks that has a problem, if
             it resolves with no problem, the second one is None
         """
@@ -117,7 +117,7 @@ class BlockChain:
 
     def find_different(self, new_blocks: List[Block]) -> Tuple[int, int]:
         """find how different two blockchain
-        
+
         Args
         ----
         blocks: List[Block]
@@ -127,7 +127,7 @@ class BlockChain:
         -------
         Tuple[int, int]
             first int is first index self blocks from last that begin different
-            
+
             second int is first index new blocks from last that begin different
         """
         # TODO: work with block height
@@ -155,14 +155,14 @@ class BlockChain:
         """get block data from first_index to last_index.
         (last_index = None means to end of blockchain)"""
         # TODO: if not exist get from full node
-        if last_index == None:
+        if last_index is None:
             last_index = len(self.blocks)
         return [block.get_data() for block in self.blocks[first_index: last_index]]
 
     def get_hashes(self, first_index=0, last_index: Optional[int] = None) -> List[str]:
         """ get list of blocks hash in blockchain """
         # TODO: if not exist get from full node
-        if last_index == None:
+        if last_index is None:
             last_index = len(self.blocks)
         if len(self.blocks) == 0:
             return []
@@ -180,7 +180,9 @@ class BlockChain:
             pre_hash = ""
             if index != 0:
                 pre_hash = blocks[index - 1].__hash__
-            validation = block.is_valid_block(unspent_coins, pre_hash=pre_hash, difficulty=difficulty)
+            validation = block.is_valid_block(unspent_coins,
+                                              pre_hash=pre_hash,
+                                              difficulty=difficulty)
             if validation != BlockValidationLevel.ALL():
                 return False, index
         return True, None

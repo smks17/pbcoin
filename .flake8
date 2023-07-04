@@ -1,0 +1,10 @@
+[flake8]
+extend-ignore = E251 E265 E722 F405 E252 E262
+exclude = .git,
+          __pycache__/,
+          build/,
+          dist/,
+          env/,
+          .pytest_cache/
+          .eggs/,
+max-line-length = 100

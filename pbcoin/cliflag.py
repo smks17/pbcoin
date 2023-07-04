@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from enum import IntEnum, IntFlag, auto
 
+
 class CliErrorCode(IntFlag):
     """Flags for using in the cli api"""
     NOTHING = 0  # no err
@@ -26,6 +27,7 @@ class CliErrorCode(IntFlag):
             return "ERROR: Mining has already been stoped"
         else:
             return f"ERROR: {self}"
+
 
 # TODO: better command and subcommand
 class CliCommandCode(IntEnum):

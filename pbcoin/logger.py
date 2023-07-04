@@ -3,6 +3,7 @@ from typing import Optional
 
 import pbcoin.config as conf
 
+
 class TracebackInfoFilter(logging.Filter):
     """Clear or restore the exception on log records"""
     def __init__(self, clear=True):
@@ -30,8 +31,9 @@ def getLogger(name: str, do_logging: Optional[bool]=None):
         return logger
 
     logger.setLevel(logging.DEBUG)
-    
-    formatter = logging.Formatter(conf.settings.logger.log_format, datefmt=conf.settings.logger.log_date_format)
+
+    formatter = logging.Formatter(conf.settings.logger.log_format,
+                                  datefmt=conf.settings.logger.log_date_format)
     logfile = logging.FileHandler(conf.settings.logger.log_filename)
     logfile.setFormatter(formatter)
     logfile.setLevel(conf.settings.logger.log_level)
@@ -46,10 +48,11 @@ def getLogger(name: str, do_logging: Optional[bool]=None):
     logger.addHandler(logfile)
     return logger
 
+
 def log_error_message(logger: logging.Logger,
-                        hostname: str,
-                        req_type: str,
-                        res_type: str):
+                      hostname: str,
+                      req_type: str,
+                      res_type: str):
     logger.error(f"Get error from node {hostname}"
-                  f"for message {req_type}"
-                  f"with err {res_type}")
+                 f"for message {req_type}"
+                 f"with err {res_type}")

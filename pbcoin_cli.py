@@ -27,8 +27,9 @@ def usage():
     print("    mempool                           print list of mempool trx")
     print("    neighbors                         print neighbors node addr")
 
+
 def cli_unix(command_code, args: List[str], socket_path: Optional[str]=None):
-    if socket_path == None:
+    if socket_path is None:
         socket_path = PIPE_SOCKET_PATH
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock_io: IO
@@ -54,8 +55,9 @@ def cli_unix(command_code, args: List[str], socket_path: Optional[str]=None):
         print("ERROR: No response from node", file=sys.stderr)
         traceback.print_exc()
 
+
 def cli_win(command_code, args: List[str], pipe_path: Optional[str]=None):
-    if pipe_path == None:
+    if pipe_path is None:
         pipe_path = PIPE_SOCKET_PATH
     handle = None
     while True:
@@ -69,18 +71,17 @@ def cli_win(command_code, args: List[str], pipe_path: Optional[str]=None):
                 0,  # dwFlagsAndAttributes
                 None
             )
-            if handle == None:
+            if handle is None:
                 raise Exception()
-            
             win32pipe.SetNamedPipeHandleState(
                 handle, win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT, None, None)
-            
         except:
             err = win32api.GetLastError()
             if err == 2:
                 continue
             else:
-                print("ERROR: Could not connect node. node probably is not running.", file=sys.stderr)
+                print("ERROR: Could not connect node. node probably is not running.",
+                      file=sys.stderr)
                 traceback.print_exc()
 
         try:

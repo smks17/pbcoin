@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import (
     Any,
     Dict,
@@ -11,7 +10,7 @@ from typing import (
 from datetime import datetime
 from hashlib import sha512
 
-from .constants import SUBSIDY
+from pbcoin.constants import SUBSIDY
 
 
 class Coin:
@@ -66,13 +65,14 @@ class Coin:
         }
 
     def __eq__(self, __o: object) -> bool:
-        return (self.trx_hash == __o.trx_hash
-            and self.index == __o.index
-            and self.owner == __o.owner
-            and self.value == __o.value)
+        return (self.trx_hash == __o.trx_hash and
+                self.index == __o.index and
+                self.owner == __o.owner and
+                self.value == __o.value)
 
     def __repr__(self) -> str:
-        return f"{self.value} from {self.owner[:8]} in transaction {self.trx_hash[:8]} with index {self.index}"
+        return f"{self.value} from {self.owner[:8]}"  \
+               f"in transaction {self.trx_hash[:8]} with index {self.index}"
 
     def check_input_coin(self, unspent_coins: dict[str, Coin]) -> bool:
         trx_hash_ = self.trx_hash
@@ -85,6 +85,7 @@ class Coin:
                 return False
         else:
             return False
+
 
 class Trx:
     """Transaction class
@@ -117,10 +118,10 @@ class Trx:
         sender_key: str,
         inputs_: Optional[List[Coin]] = None,
         outputs_: Optional[List[Coin]] = None,
-        time_: Optional[float] = None, 
+        time_: Optional[float] = None,
     ) -> None:
         self.time = datetime.utcnow().timestamp() if not time_ else time_
-        if inputs_ == None and outputs_ == None:
+        if inputs_ is None and outputs_ is None:
             self.senders = []
             self.recipients = [sender_key]
             self.value = SUBSIDY
@@ -138,7 +139,7 @@ class Trx:
                 out_coin.trx_hash = self.hash_trx
             self.outputs = outputs_
             self.is_generic = False
-        self.public_key = sender_key # TODO: should be lists
+        self.public_key = sender_key  # TODO: should be lists
         self.include_block = include_block_
 
     @staticmethod
@@ -223,9 +224,11 @@ class Trx:
         -------
             return a dict[str, Any] contains trx data
         """
+        inputs = [in_coin.get_data() for in_coin in self.inputs] if not self.is_generic else []
+        outputs = [out_coin.get_data() for out_coin in self.outputs]
         data = {
-            'inputs': [in_coin.get_data() for in_coin in self.inputs] if not self.is_generic else [],
-            'outputs': [out_coin.get_data() for out_coin in self.outputs],
+            'inputs': inputs,
+            'outputs': outputs,
             'value': self.value,
             'time': self.time if is_POSIX_timestamp else datetime.fromtimestamp(self.time),
             'include_block': self.include_block,

@@ -11,10 +11,11 @@ from pbcoin.trx import Coin, Trx
 
 class TestBlockchain:
     DIFFICULTY = (2 ** 512 - 1) >> (2)
+
     @pytest.fixture
     def setup_blockchains(self, request):
         """make n blockchain from request param and result save in self.blockchains
-        
+
         param
         -----
         n_blockchains: int
@@ -69,17 +70,20 @@ class TestBlockchain:
         indirect = True
     )
     def test_blockchain_checker(self, setup_blockchains):
-        assert BlockChain.check_blockchain(self.blockchains[0].blocks, {}, self.DIFFICULTY) == (True, None)
+        res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, self.DIFFICULTY)
+        assert res == (True, None)
 
     @pytest.mark.parametrize("setup_blockchains", [(1, 3, (0,))], indirect = True)
     def test_bad_hash_blockchain_block_checker(self, setup_blockchains):
         self.blockchains[0].last_block.block_hash = hex(self.DIFFICULTY + 2)
-        assert BlockChain.check_blockchain(self.blockchains[0].blocks, {}, self.DIFFICULTY) == (False, 2)
+        res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, self.DIFFICULTY)
+        assert res == (False, 2)
 
     @pytest.mark.parametrize("setup_blockchains", [(1, 3, (0,))], indirect = True)
     def test_bad_previous_hash_blockchain_block_checker(self, setup_blockchains):
         self.blockchains[0].blocks[1].previous_hash = "0"
-        assert BlockChain.check_blockchain(self.blockchains[0].blocks, {}, self.DIFFICULTY) == (False, 1)
+        res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, self.DIFFICULTY)
+        assert res == (False, 1)
 
     @pytest.mark.parametrize("setup_blockchains", [(1, 3, (0,))], indirect = True)
     def test_bad_trx_hash_blockchain_block_checker(self, setup_blockchains):
@@ -87,8 +91,8 @@ class TestBlockchain:
             Trx(2, "owner", [Coin("owner1", 0)], [Coin("owner2", 0, value_=20)]))
         pre_hash = self.blockchains[0].blocks[1].calculate_hash()
         self.blockchains[0].blocks[1].previous_hash = pre_hash
-        assert BlockChain.check_blockchain(self.blockchains[0].blocks, {}, self.DIFFICULTY) == (False, 1)
-
+        res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, self.DIFFICULTY)
+        assert res == (False, 1)
 
     @pytest.mark.parametrize(
         "setup_blockchains",
@@ -117,7 +121,8 @@ class TestBlockchain:
         indirect=True
     )
     def test_resolve(self, setup_blockchains):
-        assert self.blockchains[0].resolve(self.blockchains[1].blocks, {}, self.DIFFICULTY) == (True, None), \
+        res = self.blockchains[0].resolve(self.blockchains[1].blocks, {}, self.DIFFICULTY)
+        assert res == (True, None), \
             "Problem in resolve blockchain"
         assert self.blockchains[0].blocks == self.blockchains[1].blocks, \
             "Problem in blocks added after resolve"
@@ -129,7 +134,7 @@ class TestBlockchain:
     )
     def test_do_not_resolve_bad_chain(self, setup_blockchains):
         last_block = self.blockchains[1].blocks[-1]
-        last_block.previous_hash = "nonsense" # bad previous hash
+        last_block.previous_hash = "nonsense"  # bad previous hash
         result = self.blockchains[0].resolve(self.blockchains[1].blocks, {}, self.DIFFICULTY)
         assert (False, 2) == result, "Problem in checking other blockchain for resolving"
         assert self.blockchains[0].blocks != self.blockchains[1].blocks, \
@@ -137,7 +142,7 @@ class TestBlockchain:
 
     def test_last_block(self):
         chain = BlockChain([])
-        assert chain.last_block == None, "Last block in empty blockchain is not None"
+        assert chain.last_block is None, "Last block in empty blockchain is not None"
         assert chain.height == 0, "height of empty blockchain is not 0"
         chain.add_new_block(Block("", 1), {}, ignore_validation=True)
         chain.blocks[0].set_mined()

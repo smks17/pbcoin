@@ -4,6 +4,7 @@ import sys
 
 import pbcoin.config as conf
 
+
 def usage():
     print("usage python pbcoin.py [option]")
     print("options:")
@@ -17,6 +18,7 @@ def usage():
     print("  --socket-path <PATH>       the node UNIX/pipe(for windows) socket path which is used for cli to connect to")
     print("  --logging-filename <PATH>  logging in this filename")
     print("  --no-logging               no capture any logging")
+
 
 def parse_argv(argv: list[str]):
     option = {}
@@ -57,8 +59,8 @@ def parse_argv(argv: list[str]):
             usage()
             sys.exit(-1)
         i += 1
-    
     return option
+
 
 def main():
     argv = sys.argv
@@ -66,6 +68,7 @@ def main():
     conf.settings.update(option)
     from pbcoin.runner import run
     run()
+
 
 if __name__ == "__main__":
     main()

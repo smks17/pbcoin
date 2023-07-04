@@ -80,7 +80,7 @@ class TestMakeConnection(TestNetworkBase):
                                         if (len(self.nodes)-1) <= TOTAL_NUMBER_CONNECTIONS
                                         else TOTAL_NUMBER_CONNECTIONS)
                 assert len(node.neighbors) == actual_len_neighbors, f"{node.addr.hostname}"
-                # TODO: better check neighbors when neighbors is more than TOTAL_NUMBER_CONNECTIONS
+                # TODO: better check neighbors when neighbors is more than CAPACITY
                 assert node.neighbors.items() <= actual_neighbors(node.addr).items()
         return check
 
@@ -111,8 +111,8 @@ class TestMakeConnection(TestNetworkBase):
         "run_nodes", [(2, True)], ids = ["two nodes"], indirect = True
     )
     async def test_find_neighbors_more_total_connection_nodes(self,
-                                                             run_nodes,
-                                                             actual_neighbors):
+                                                              run_nodes,
+                                                              actual_neighbors):
         """run 2 and 4 nodes and check they handle neighbors even if more than
         total number connections for each nodes"""
         for node in self.nodes:
@@ -127,6 +127,7 @@ class TestMakeConnection(TestNetworkBase):
 
 class TestProcessingHandler(TestNetworkBase):
     DIFFICULTY = (2 ** 512 - 1) >> 2
+
     @pytest.fixture(scope="class", autouse=True)
     def set_difficulty(self):
         import pbcoin.config as conf
