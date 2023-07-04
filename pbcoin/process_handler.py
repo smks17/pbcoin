@@ -3,13 +3,11 @@ from __future__ import annotations
 from copy import copy, deepcopy
 from typing import TYPE_CHECKING, Dict, Optional
 
-from ellipticcurve.publicKey import PublicKey
-from ellipticcurve.signature import Signature
-
 from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
 from pbcoin.utils.netbase import Addr, Peer
 from pbcoin.netmessage import ConnectionCode, Errno, Message
+from pbcoin.utils.tuple_util import tuple_from_string
 from pbcoin.logger import getLogger
 from pbcoin.trx import Coin, Trx
 if TYPE_CHECKING:
@@ -266,8 +264,8 @@ class ProcessingHandler:
 
     async def handle_new_trx(self, message: Message, peer: Peer, node: Node):
         message.data['passed_nodes'].append(node.addr.hostname)
-        pubKey = PublicKey.fromString(message.data['public_key'])
-        sig = Signature.fromBase64(message.data['signature'].encode())
+        public_key = message.data['public_key']
+        sig = tuple_from_string(message.data['signature'], from_b64=True)
         trx_data = message.data['trx']
         trx_inputs = trx_data['inputs']
         trx_outputs = trx_data['outputs']
@@ -291,7 +289,7 @@ class ProcessingHandler:
         # add to mempool and send other nodes
         result = self.mempool.add_new_transaction(new_trx,
                                                   sig,
-                                                  pubKey,
+                                                  public_key,
                                                   self.unspent_coins)
         if result:
             for pub_key in node.neighbors:

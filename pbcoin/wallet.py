@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from os import makedirs
-from random import random
-from typing import Dict, List, Optional, TYPE_CHECKING
-
-from ellipticcurve.privateKey import PrivateKey
-from ellipticcurve.signature import Signature
-from ellipticcurve.ecdsa import Ecdsa
+import os.path as opt
+from random import randint
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
+import base64
 
 import pbcoin.config as conf
+from pbcoin.utils.address import Address
+from pbcoin.utils.tuple_util import tuple_to_string
 if TYPE_CHECKING:
     from pbcoin.blockchain import BlockChain
     from pbcoin.mempool import Mempool
@@ -22,29 +21,30 @@ import pbcoin.core as core
 
 class Wallet:
     n_amount: float
-    walletKey: PrivateKey
+    _address: Address
     out_coins: Dict[str, List[Coin]]
-    name = f"Wallet-{int(random()*1000)}"
 
-    def __init__(self, key=None):
-        if key is not None:
-            # TODO: check keys
-            # TODO: trace for find amount of wallet
-            pass
+    def __init__(self,
+                 path_secret_key: str = r"./.key",  # TODO: use global variable
+                 wallet_name: Optional[str] = None,
+                 generate = True,):
+        if wallet_name is None:
+            wallet_name = f"Wallet-{randint(1, 1000)}"
+        self.name = wallet_name
+        output_path = opt.join(path_secret_key, wallet_name)
+        if generate:
+            self.gen_key(output_path)
         else:
-            self.gen_key()
-            self.n_amount = 0
-            self.out_coins = dict()
+            self.load_key(output_path)
+        self.n_amount = 0
+        self.out_coins = dict()
 
-    def gen_key(self):
-        """generate a pair key and save in memory and file"""
-        # TODO: better usage
-        self.walletKey = PrivateKey()
-        makedirs("./.key", exist_ok=True)
-        with open("./.key/key.pub", "w") as file:
-            file.write(self.public_key)
-        with open("./.key/key.sk", "w") as file:
-            file.write(str(self.walletKey.secret))
+    def gen_key(self, path: str):
+        self._address = Address()
+        self._address.save(path)
+
+    def load_key(self, path: str):
+        self._address = Address.load(path)
 
     def updateBalance(self, trx_list: List[Trx]) -> None:
         """update balance wallet user from new trx list"""
@@ -86,7 +86,7 @@ class Wallet:
             # add to own mempool
             if not mempool.add_new_transaction(made_trx,
                                                self.sign(made_trx),
-                                               self.walletKey.publicKey(),
+                                               self.walletKey.public_key,
                                                unspent_coins):
                 return False
             # send to nodes and add to network mempool
@@ -96,14 +96,17 @@ class Wallet:
         else:
             return False
 
-    def sign(self, trx: Trx) -> Signature:
+    def sign(self, trx: Trx) -> Tuple[int, int]:
         """sign the transaction for add to mempool or send other nodes"""
-        return Ecdsa.sign(trx.__hash__, self.walletKey)
+        return self._address.sign(trx.__hash__)
 
     def base64Sign(self, trx_) -> bytes:
         """sign data and return base 64 signature"""
-        return self.sign(trx_).toBase64()
+        return tuple_to_string(self.sign(trx_),
+                               max_val=self._address.SECP256K1.N,
+                               to_b64=True).decode()
 
     @property
     def public_key(self) -> str:
-        return self.walletKey.publicKey().toString()
+        """base64 of public key"""
+        return base64.b64encode(self._address.public_key.encode()).decode()

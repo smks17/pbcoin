@@ -5,7 +5,7 @@ long_description = ""
 with open("README.md", "r") as file:
     long_description = file.read()
 
-install_requires = ["starkbank-ecdsa==2.0.3"]
+install_requires = []
 if sys.platform == 'win32':
     install_requires += [
         "pypiwin32==223",
@@ -24,7 +24,7 @@ setup(
     python_requires=">=3.8",
     install_requires=[install_requires],
     setup_requires=['pytest-runner'],
-    tests_require=['pytest'],
+    tests_require=['pytest', 'pytest-asyncio'],
     entry_points={
         'console_scripts': [
             'node=node:main',

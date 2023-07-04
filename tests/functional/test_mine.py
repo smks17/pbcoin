@@ -1,12 +1,12 @@
+import os
 import pytest
-from ellipticcurve.ecdsa import Ecdsa
-from ellipticcurve.privateKey import PrivateKey
 
 from pbcoin.block import Block
 from pbcoin.blockchain import BlockChain
 from pbcoin.mempool import Mempool
 from pbcoin.mine import Mine
 from pbcoin.trx import Coin, Trx
+from pbcoin.wallet import Wallet
 
 
 class TestTrx:
@@ -43,14 +43,13 @@ class TestTrx:
         """
         # init objects
         blockchain = BlockChain()
-        private_key = PrivateKey()
-        public_key = private_key.publicKey()
+        wallet = Wallet(path_secret_key=os.environ["KEY_PATH"])
         mempool = Mempool()
         miner = Mine(blockchain, None, mempool, None)
         unspent_coins = dict()
 
         # mine one block with no transaction
-        new_block = blockchain.setup_new_block(Trx(1, public_key.toString()), mempool)
+        new_block = blockchain.setup_new_block(Trx(1, wallet.public_key), mempool)
         await miner.mine(new_block, add_block=False, difficulty=self.DIFFICULTY)
         blockchain.add_new_block(new_block,
                                  unspent_coins=unspent_coins,
@@ -58,15 +57,15 @@ class TestTrx:
         # make a new transaction for testing mining one block
         new_trx = Trx(
             2,
-            public_key.toString(),
+            wallet.public_key,
             blockchain.last_block.transactions[-1].outputs,
-            [Coin(public_key.toString(), 0, value_=30),
+            [Coin(wallet.public_key, 0, value_=30),
              Coin("fake1", 1, value_=20)]
         )
         # add new transaction to mempool and check it
         assert mempool.add_new_transaction(new_trx,
-                                           Ecdsa.sign(new_trx.__hash__, private_key),
-                                           public_key,
+                                           wallet.sign(new_trx),
+                                           wallet.public_key,
                                            unspent_coins), \
             "Could not add transaction to mempool because has bad validation"
         assert len(mempool.transactions) == 1, "Transaction didn't add to mempool"
@@ -74,7 +73,7 @@ class TestTrx:
         new_block.update_outputs(unspent_coins)
 
         # mine second block with new transaction and check it
-        new_block = blockchain.setup_new_block(Trx(2, public_key.toString()), miner.mempool)
+        new_block = blockchain.setup_new_block(Trx(2, wallet.public_key), miner.mempool)
         await miner.mine(new_block, add_block=False, difficulty=self.DIFFICULTY)
         blockchain.add_new_block(new_block,
                                  ignore_validation=True,
@@ -85,36 +84,38 @@ class TestTrx:
         assert len(last_block.transactions) == 2, "Transactions didn't add to mined block"
         # check transaction in mined block is same or not
         actual_outputs = [
-            Coin(public_key.toString(), 0, last_block.get_list_hashes_trx()[1], 30),
+            Coin(wallet.public_key, 0, last_block.get_list_hashes_trx()[1], 30),
             Coin('fake1', 1, last_block.get_list_hashes_trx()[1], 20),
         ]
         assert last_block.transactions[1].outputs == actual_outputs, "Bad output transaction"
         actual_inputs = [
-            Coin(public_key.toString(), 0, blockchain.blocks[0].transactions[0].hash_trx, 50)
+            Coin(wallet.public_key, 0, blockchain.blocks[0].transactions[0].hash_trx, 50)
         ]
         assert last_block.transactions[1].inputs == actual_inputs, "Bad input transaction"
         assert len(miner.mempool) == 0, "Didn't delete mempool transaction that was mined"
 
         new_trx = [
             Trx(3,
-                public_key.toString(),
+                wallet.public_key,
                 [blockchain.last_block.transactions[-1].outputs[0]],
                 [Coin("fake2", 1, value_=30)]),
             Trx(3,
-                public_key.toString(),
+                wallet.public_key,
                 [blockchain.last_block.transactions[-1].outputs[1]],
                 [Coin("fake1", 1, value_=20)])
         ]
         mempool.max_limit_trx = 1
         # add new transaction to mempool and check it
         for trx in new_trx:
-            assert mempool.add_new_transaction(trx, Ecdsa.sign(
-                trx.__hash__, private_key), public_key, unspent_coins), \
+            assert mempool.add_new_transaction(trx,
+                                               wallet.sign(trx),
+                                               wallet.public_key,
+                                               unspent_coins), \
                 "Could not add transaction to mempool because has bad validation"
         assert len(mempool.transactions) == 2, "Transaction didn't add to mempool"
 
         # mine third block with new transaction and check it
-        new_block = blockchain.setup_new_block(Trx(3, public_key.toString()), miner.mempool)
+        new_block = blockchain.setup_new_block(Trx(3, wallet.public_key), miner.mempool)
         await miner.mine(new_block, add_block=False, difficulty=self.DIFFICULTY)
         blockchain.add_new_block(new_block, ignore_validation=True, difficulty=self.DIFFICULTY)
         assert len(blockchain.blocks) == 3, "Could not Mine new block"
@@ -126,7 +127,7 @@ class TestTrx:
         ]
         assert last_block.transactions[1].outputs == actual_outputs, "Bad output transaction"
         actual_inputs = [
-            Coin(public_key.toString(), 0, blockchain.blocks[1].transactions[1].hash_trx, 30)
+            Coin(wallet.public_key, 0, blockchain.blocks[1].transactions[1].hash_trx, 30)
         ]
         assert last_block.transactions[1].inputs == actual_inputs, "Bad input transaction"
         assert len(miner.mempool) == 1, \

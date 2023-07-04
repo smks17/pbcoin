@@ -1,5 +1,6 @@
 import asyncio
 from copy import deepcopy
+import os
 
 import pytest
 
@@ -38,7 +39,7 @@ class TestNetworkBase:
                         pub_key=f"0x2{i+1}")  # TODO: make a valid public key with Key class
             blockchain = BlockChain([])
             unspent_coins = dict()
-            wallet = Wallet()
+            wallet = Wallet(path_secret_key=os.environ["KEY_PATH"])
             mempool = Mempool()
             proc_handler = ProcessingHandler(blockchain, unspent_coins, wallet, mempool)
             node = Node(addr, proc_handler, 1)
@@ -319,7 +320,7 @@ class TestProcessingHandler(TestNetworkBase):
             mempool = sender.proc_handler.mempool
             result = mempool.add_new_transaction(new_trx,
                                                  wallet.sign(new_trx),
-                                                 wallet.walletKey.publicKey(),
+                                                 wallet.public_key,
                                                  sender.proc_handler.unspent_coins)
             assert result
             errors = await sender.send_new_trx(new_trx, wallet)
@@ -346,7 +347,7 @@ class TestProcessingHandler(TestNetworkBase):
             mempool = sender.proc_handler.mempool
             result = mempool.add_new_transaction(new_trx,
                                                  wallet.sign(new_trx),
-                                                 wallet.walletKey.publicKey(),
+                                                 wallet.public_key,
                                                  sender.proc_handler.unspent_coins)
             assert not result, "Could not add new trx in mempool"
             errors = await sender.send_new_trx(new_trx, wallet)

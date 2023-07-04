@@ -91,7 +91,7 @@ and coin contains:
 # TODO
 
 - [ ] full node and not SVP
-- [ ] implement key and sign
+- [x] implement key and sign
 - [ ] unittest
 - [ ] dockerize
 - [ ] separate wallet and node

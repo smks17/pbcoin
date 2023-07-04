@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
-from ellipticcurve.ecdsa import Ecdsa
-from ellipticcurve.publicKey import PublicKey
-from ellipticcurve.signature import Signature
-
+from pbcoin.utils.address import Address
 from pbcoin.trx import Coin, Trx
 
 
@@ -40,7 +37,9 @@ class Mempool:
             if trx not in self.in_mining_block:
                 self.in_mining_block.append(trx)
 
-    def add_new_transaction(self, trx: Trx, sig: Signature, pub_key: PublicKey,
+    def add_new_transaction(self, trx: Trx,
+                            sig: Tuple[int, int],
+                            public_key: str,
                             unspent_coins: Dict[str, Coin]) -> bool:
         """add a new transaction to the all mempool transaction and the queue for mining block
 
@@ -48,10 +47,10 @@ class Mempool:
         ----
         trx: Trx
             the transaction that you want add to the mempool
-        sig: Signature
-            signature of the transaction that sender sign
-        pub_key: PublicKey
-            sender public key
+        sig: Tuple[int, int]
+            parameters of signature (r, s) from the transaction
+        pub_key: str
+            sender public key in hex
         unspent_coins: Dict[str, Coin]
             list of unspent coins until here
         """
@@ -60,7 +59,7 @@ class Mempool:
         if trx.__hash__ in self.transactions:
             return False
         # checking its sign to be verified
-        if not Ecdsa.verify(trx.__hash__, sig, pub_key):
+        if not Address.verify(trx.__hash__, sig, public_key, from_b64=True):
             return False
         # check double spent and other things
         if not trx.check(unspent_coins):
