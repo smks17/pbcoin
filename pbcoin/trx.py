@@ -200,7 +200,7 @@ class Trx:
         cal_hash = sha512(
             (f"{self.senders}{self.recipients}{self.value}{self.time}").encode()
         ).hexdigest()
-        self.block_hash = cal_hash
+        self.hash_trx = cal_hash
         return cal_hash
 
     def get_data(self, with_hash=False, is_POSIX_timestamp=True) -> Dict[str, Any]:
