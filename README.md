@@ -83,6 +83,7 @@ each transaction contains:
 
 ## Coin
 and coin contains:
+- hash: calculated of coin hash
 - value: the amount of this coin
 - owner: who is (or was) this coin for
 - trx_hash: exists in which transaction

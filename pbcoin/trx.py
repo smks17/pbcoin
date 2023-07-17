@@ -19,6 +19,7 @@ class Coin:
         self.value = value_
         self.trx_hash = trx_hash_
         self.index = index_
+        self.hash_coin = self.calculate_hash()
 
     def make_output(self, recipient_key: str, amount: float) -> Tuple[bool, int]:
         """
@@ -52,12 +53,14 @@ class Coin:
     def get_data(self) -> Dict[str, Any]:
         """
         return a dictionary that contains:
+        - hash: calculated of coin hash
         - value: the amount of this coin
         - owner: who is (or was) this coin for
         - trx_hash: exists in which transaction
         - index: index of transaction in the block that contains this transaction
         """
         return {
+            "hash": self.__hash__,
             "value": self.value,
             "owner": self.owner,
             "trx_hash": self.trx_hash,
@@ -73,6 +76,18 @@ class Coin:
     def __repr__(self) -> str:
         return f"{self.value} from {self.owner[:8]}"  \
                f"in transaction {self.trx_hash[:8]} with index {self.index}"
+
+    def calculate_hash(self) -> str:
+        """calculate this trx hash and return hex hash"""
+        cal_hash = sha512(
+            (f"{self.value}{self.owner}{self.trx_hash}{self.index}").encode()
+        ).hexdigest()
+        self.coin_hash = cal_hash
+        return cal_hash
+
+    @property
+    def __hash__(self) -> str:
+        return self.calculate_hash() if not self.hash_coin else self.hash_coin
 
     def check_input_coin(self, unspent_coins: dict[str, Coin]) -> bool:
         trx_hash_ = self.trx_hash
