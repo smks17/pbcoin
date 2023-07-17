@@ -42,9 +42,9 @@ CACHE: float = 15
 FULL_NODE: bool = False
 
 # Difficult level of hash block which should be less than
-#                       512 bit 1   left first 23 bit set 0
+#                       256 bit 1   left first 23 bit set 0
 #                     -----------------------------------
-DIFFICULTY: int = (2 ** 512 - 1) >> (10)
+DIFFICULTY: int = (2 ** 256 - 1) >> (10)
 
 # TODO: could be better it isn't constant
 # the amount of miner prize for mine a block

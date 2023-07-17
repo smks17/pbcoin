@@ -8,7 +8,7 @@ from typing import (
     Tuple
 )
 from datetime import datetime
-from hashlib import sha512
+from hashlib import sha256
 
 from pbcoin.constants import SUBSIDY
 
@@ -79,7 +79,7 @@ class Coin:
 
     def calculate_hash(self) -> str:
         """calculate this trx hash and return hex hash"""
-        cal_hash = sha512(
+        cal_hash = sha256(
             (f"{self.value}{self.owner}{self.trx_hash}{self.index}").encode()
         ).hexdigest()
         self.coin_hash = cal_hash
@@ -212,7 +212,7 @@ class Trx:
 
     def calculate_hash(self) -> str:
         """calculate this trx hash and return hex hash"""
-        cal_hash = sha512(
+        cal_hash = sha256(
             (f"{self.senders}{self.recipients}{self.value}{self.time}").encode()
         ).hexdigest()
         self.hash_trx = cal_hash

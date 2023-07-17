@@ -5,7 +5,7 @@ from datetime import datetime
 from functools import reduce
 from enum import Flag, auto
 from operator import or_ as _or_
-from hashlib import sha512
+from hashlib import sha256
 from sys import getsizeof
 from typing import Any, Dict, Optional
 
@@ -154,7 +154,7 @@ class Block:
         if self.merkle_tree is None:
             self.build_merkle_tree()
         data = self.merkle_tree.hash + str(self.nonce) + self.previous_hash + str(self.time)
-        calculated_hash = sha512((data).encode()).hexdigest()
+        calculated_hash = sha256((data).encode()).hexdigest()
         self.block_hash = calculated_hash
         return calculated_hash
 

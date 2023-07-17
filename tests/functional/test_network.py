@@ -127,7 +127,7 @@ class TestMakeConnection(TestNetworkBase):
 
 
 class TestProcessingHandler(TestNetworkBase):
-    DIFFICULTY = (2 ** 512 - 1) >> 2
+    DIFFICULTY = (2 ** 256 - 1) >> 2
 
     @pytest.fixture(scope="class", autouse=True)
     def set_difficulty(self):

@@ -10,7 +10,7 @@ from pbcoin.trx import Coin, Trx
 
 
 class TestBlockchain:
-    DIFFICULTY = (2 ** 512 - 1) >> (2)
+    DIFFICULTY = (2 ** 256 - 1) >> (2)
 
     @pytest.fixture
     def setup_blockchains(self, request):

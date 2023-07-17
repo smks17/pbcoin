@@ -10,7 +10,7 @@ from pbcoin.wallet import Wallet
 
 
 class TestTrx:
-    DIFFICULTY = (2 ** 512 - 1) >> (2)
+    DIFFICULTY = (2 ** 256 - 1) >> (2)
 
     @pytest.fixture
     async def mine_some_blocks(self, request):
