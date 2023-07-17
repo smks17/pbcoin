@@ -15,6 +15,7 @@ from typing import (
 )
 
 import pbcoin.config as conf
+from pbcoin.block import Block
 from pbcoin.blockchain import BlockChain
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
 from pbcoin.logger import getLogger, log_error_message
@@ -228,6 +229,25 @@ class Node(Connection):
             if not response.status:
                 if response.type_ == Errno.BAD_BLOCK_VALIDATION:
                     pass  # TODO: better handle error
+                if response.type_ == Errno.OBSOLETE_BLOCK:
+                    request = Message(status = True,
+                                      type_ = ConnectionCode.GET_BLOCKS,
+                                      addr = dst_addr,
+                                      ).create_data(first_index = self.proc_handler.blockchain.height - 1)
+                    res = await self.connect_and_send(message.addr, request.create_message(self.addr))
+                    res = Message.from_str(res.decode())
+                    if res.status:
+                        blocks = res.data['blocks']
+                        blocks = [Block.from_json_data_full(block) for block in blocks]
+                        result, block_index, validation = self.proc_handler.blockchain.resolve(blocks, self.proc_handler.unspent_coins)
+                        if result:
+                            logging.debug(f"new block chian: {self.proc_handler.blockchain.get_hashes()}")
+                            break
+                        # TODO: Add penalty for node that badly response and tell it
+                        else:
+                            logging.debug("Bad validation blocks that it sent for get blocks")
+                    else:
+                        logging.error("Bad request send for get blocks")
                 errors.append((response.addr, response.type_, response.data))
                 log_error_message(logging,
                                   dst_addr.hostname,

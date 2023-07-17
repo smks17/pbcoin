@@ -203,6 +203,36 @@ class TestProcessingHandler(TestNetworkBase):
         assert receiver.proc_handler.blockchain.height == 0, \
                "it received bad mined block"
 
+    @pytest.mark.parametrize("run_nodes", [(2, True)], ids=["two nodes"], indirect=True)
+    async def test_handling_one_block_shorter_mined_block(self, run_nodes, mine_some_blocks):
+        """Test handle new mine block which its height is less than other node blockchain length"""
+        sender = self.nodes[0]
+        sender_blocks = await mine_some_blocks(1, sender, False)
+        receiver = self.nodes[1]
+        receiver_blocks = await mine_some_blocks(2, receiver, False)
+        errors = await sender.send_mined_block(sender_blocks[-1])
+        # assertions
+        assert errors == [], "Mined block probably wrong"
+        assert sender.proc_handler.blockchain.height == 2,  \
+               "Sender didn't received longer blockchain"
+        assert sender.proc_handler.blockchain.blocks == receiver_blocks,  \
+               "Sender blockchain is not same with receiver blockchain"
+
+    @pytest.mark.parametrize("run_nodes", [(2, True)], ids=["two nodes"], indirect=True)
+    async def test_handling_two_blocks_shorter_mined_block(self, run_nodes, mine_some_blocks):
+        """Test handle new mine block which its height is less than other node blockchain length"""
+        sender = self.nodes[0]
+        sender_blocks = await mine_some_blocks(1, sender, False)
+        receiver = self.nodes[1]
+        receiver_blocks = await mine_some_blocks(3, receiver, False)
+        errors = await sender.send_mined_block(sender_blocks[-1])
+        # assertions
+        assert errors == [], "Mined block probably wrong"
+        assert sender.proc_handler.blockchain.height == 3,  \
+               "Sender didn't received longer blockchain"
+        assert sender.proc_handler.blockchain.blocks == receiver_blocks,  \
+               "Sender blockchain is not same with receiver blockchain"
+        
     @pytest.mark.parametrize("run_nodes", [(2, False)], ids=["two nodes"], indirect=True)
     async def test_resolving_blockchain(self, run_nodes, mine_some_blocks):
         sender = self.nodes[0]
@@ -354,3 +384,6 @@ class TestProcessingHandler(TestNetworkBase):
         assert len(errors) != 0, "We haven't catch errors in handle new bad trx"
         assert receiver.proc_handler.mempool.is_exist(new_trx.hash_trx) is False,  \
                "Didn't received new trx in mempool"
+
+
+# TODO: Write some comment and docs

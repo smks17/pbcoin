@@ -30,6 +30,7 @@ class Errno(IntEnum):
     BAD_TYPE_MESSAGE = auto()  # message type is not from ConnectionCode
     BAD_BLOCK_VALIDATION = auto()  # the block(s) that were sended has problem
     BAD_TRANSACTION = auto()  # the transaction(s) that were received has problem
+    OBSOLETE_BLOCK = auto()  # A block in a blockchain that is behind other node blockchain
 
 
 class Message:

@@ -1,7 +1,7 @@
 import os
 import pytest
 
-from pbcoin.block import Block
+from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.blockchain import BlockChain
 from pbcoin.mempool import Mempool
 from pbcoin.mine import Mine
@@ -35,7 +35,7 @@ class TestTrx:
     async def test_mine_some_block(self, mine_some_blocks):
         """just test mine a valid block or not (with no extra transactions)"""
         result = BlockChain.check_blockchain(self.blockchain.blocks, {}, self.DIFFICULTY)
-        assert result == (True, None)
+        assert result == (True, None, BlockValidationLevel.ALL())
 
     async def test_mine_with_transaction(self):
         """this function mine 3 blocks and check all possible of transactions getting

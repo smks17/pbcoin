@@ -75,7 +75,7 @@ class BlockChain:
         new_blocks: List[Block],
         unspent_coins: Dict[str, Coin],
         difficulty = None  # almost for unittest
-    ) -> Tuple[bool, Optional[int]]:
+    ) -> Tuple[bool, Optional[int], BlockValidationLevel]:
         """resolve the this blockchain with new blocks
 
         Args
@@ -89,10 +89,11 @@ class BlockChain:
 
         Return
         ------
-        Tuple[bool, Optional[int]]:
+        Tuple[bool, Optional[int], BlockValidationlevel]:
             return a tuple which the first is to determine does resolving could do or not
             and the second one is the index of block in new_blocks that has a problem, if
-            it resolves with no problem, the second one is None
+            it resolves with no problem, the second one is None. And that last one fore
+            validation level that is valid.
         """
         if difficulty is None:
             difficulty = conf.settings.glob.difficulty
@@ -105,7 +106,6 @@ class BlockChain:
         for i in range(self_blockchain_index):
             self.blocks[-i].revert_outputs(copy_unspent_coins)
             self.blocks.pop()
-        # TODO: update outputs coins
         for trx_hash in copy_unspent_coins:
             unspent_coins[trx_hash] = copy_unspent_coins[trx_hash]
         for i in range(new_blockchain_index, 0, -1):
@@ -113,7 +113,7 @@ class BlockChain:
             self.blocks.append(new_blocks[len(new_blocks) - i])
         while (not self.is_full_node) and (self.__sizeof__() >= self.cache):
             self.blocks.pop(0)
-        return (True, None)
+        return (True, None, BlockValidationLevel.ALL())
 
     def find_different(self, new_blocks: List[Block]) -> Tuple[int, int]:
         """find how different two blockchain
@@ -173,7 +173,7 @@ class BlockChain:
         blocks: List[Block],
         unspent_coins: Dict[str, Coin],
         difficulty = None  # almost just for unittest
-    ) -> Tuple[bool, Optional[int]]:
+    ) -> Tuple[bool, Optional[int], BlockValidationLevel]:
         if difficulty is None:
             difficulty = conf.settings.glob.difficulty
         for index, block in enumerate(blocks):
@@ -184,8 +184,8 @@ class BlockChain:
                                               pre_hash=pre_hash,
                                               difficulty=difficulty)
             if validation != BlockValidationLevel.ALL():
-                return False, index
-        return True, None
+                return False, index, validation
+        return True, None, BlockValidationLevel.ALL()
 
     @staticmethod
     def json_to_blockchain(blockchain_data: List[Dict[str, Any]]) -> BlockChain:
