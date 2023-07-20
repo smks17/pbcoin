@@ -48,17 +48,14 @@ async def mine_starter(how_many: Union[inf_type, int]=inf):
             while True:
                 await core.MINER.mine()
                 Block.update_outputs(deepcopy(core.MINER.setup_block), core.ALL_OUTPUTS)
-                core.WALLET.updateBalance(deepcopy(core.MINER.setup_block.transactions))
         else:
             for _ in range(how_many):
                 await core.MINER.mine()
                 core.MINER.setup_block.update_outputs(core.ALL_OUTPUTS)
-                core.WALLET.updateBalance(deepcopy(core.MINER.setup_block.transactions))
 
 
 async def setup_network(has_cli, has_socket_network):
     """Set up network for connect other nodes and cli"""
-    core.WALLET.gen_key()
     logging.info(f"your public key is generated: {core.WALLET.public_key}")
     handlers = []
     if has_socket_network:

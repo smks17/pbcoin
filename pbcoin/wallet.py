@@ -20,14 +20,14 @@ import pbcoin.core as core
 
 
 class Wallet:
-    n_amount: float
     _address: Address
-    out_coins: Dict[str, List[Coin]]
+    my_out_coins: Dict[str, List[Coin]]
 
     def __init__(self,
                  path_secret_key: str = r"./.key",  # TODO: use global variable
                  wallet_name: Optional[str] = None,
-                 generate = True,):
+                 generate = True,
+                 unspent_coins: Optional[Dict[str, Coin]] = None):
         if wallet_name is None:
             wallet_name = f"Wallet-{randint(1, 1000)}"
         self.name = wallet_name
@@ -36,8 +36,9 @@ class Wallet:
             self.gen_key(output_path)
         else:
             self.load_key(output_path)
-        self.n_amount = 0
-        self.out_coins = dict()
+        if unspent_coins is None:
+            unspent_coins = core.ALL_OUTPUTS
+        self.unspent_coins = unspent_coins
 
     def gen_key(self, path: str):
         self._address = Address()
@@ -46,30 +47,13 @@ class Wallet:
     def load_key(self, path: str):
         self._address = Address.load(path)
 
-    def updateBalance(self, trx_list: List[Trx]) -> None:
-        """update balance wallet user from new trx list"""
-        for trx in trx_list:
-            for in_coin in trx.inputs:
-                if in_coin.owner == self.public_key:
-                    self.out_coins[in_coin.trx_hash].remove(in_coin)
-                    self.n_amount -= in_coin.value  # TODO: check nAmount
-
-            for out_coin in trx.outputs:
-                if out_coin.owner == self.public_key:
-                    trx = self.out_coins.get(out_coin.trx_hash, None)
-                    if trx:
-                        self.out_coins[out_coin.trx_hash].append(out_coin)
-                    else:
-                        self.out_coins[out_coin.trx_hash] = [out_coin]
-                    self.n_amount += out_coin.value
-
     async def send_coin(self,
                         recipient: str,
                         value: float,
                         mempool: Optional[Mempool] = None,  # just uses for unittest
                         blockchain: Optional[BlockChain] = None,  # just uses for unittest
                         node: Optional[Node] = None,  # just uses for unittest
-                        unspent_coins: Optional[Dict[str, Coin]] = None) -> bool:
+    ) -> bool:
         """make a transaction to send coins and publish trx to the network"""
         if mempool is None:
             mempool = core.MEMPOOL
@@ -77,17 +61,15 @@ class Wallet:
             blockchain = core.BLOCK_CHAIN
         if node is None:
             node = core.NETWORK
-        if unspent_coins is None:
-            unspent_coins = core.ALL_OUTPUTS
         # if user have amount for sending
-        if value <= self.n_amount:
+        if value <= self.balance:
             made_trx = Trx.make_trx(sum(list(self.out_coins.values()), []),
                                     self.public_key, recipient, value)
             # add to own mempool
             if not mempool.add_new_transaction(made_trx,
                                                self.sign(made_trx),
-                                               self.walletKey.public_key,
-                                               unspent_coins):
+                                               self.public_key,
+                                               self.unspent_coins):
                 return False
             # send to nodes and add to network mempool
             if conf.settings.glob.network:
@@ -110,3 +92,28 @@ class Wallet:
     def public_key(self) -> str:
         """base64 of public key"""
         return base64.b64encode(self._address.public_key.encode()).decode()
+
+    @property
+    def balance(self) -> int:
+        amount = 0
+        for trx_hash in self.unspent_coins:
+            coins = self.unspent_coins[trx_hash]
+            for coin in coins:
+                if coin.owner == self.public_key:
+                    amount += coin.value
+        return amount
+
+    @property
+    def out_coins(self) -> Dict[str, Coin]:
+        """my unspent output coins"""
+        my_coins = dict()
+        for trx_hash in self.unspent_coins:
+            coins = self.unspent_coins[trx_hash]
+            for coin in coins:
+                if coin.owner == self.public_key:
+                    trx_coins = my_coins.get(coin.trx_hash, None)
+                    if trx_coins is None:
+                        my_coins[coin.trx_hash] = [coin]
+                    else:
+                        trx_coins.append(coin)
+        return my_coins

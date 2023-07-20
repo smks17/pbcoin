@@ -218,3 +218,6 @@ class BlockChain:
         for block in self.blocks:
             size += getsizeof(block)
         return size
+
+    def __getitem__(self, index):
+        return self.blocks[index]

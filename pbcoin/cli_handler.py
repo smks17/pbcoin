@@ -126,7 +126,7 @@ class CliServer():
             if not res:
                 errors |= CliErrorCode.TRX_PROBLEM
         elif command == CliCommandCode.BALANCE:
-            result += str(core.WALLET.n_amount)
+            result += str(core.WALLET.balance)
         elif command == CliCommandCode.BLOCK:
             try:
                 if args[0] == '--last':

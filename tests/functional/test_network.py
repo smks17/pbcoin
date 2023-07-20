@@ -39,7 +39,7 @@ class TestNetworkBase:
                         pub_key=f"0x2{i+1}")  # TODO: make a valid public key with Key class
             blockchain = BlockChain([])
             unspent_coins = dict()
-            wallet = Wallet(path_secret_key=os.environ["KEY_PATH"])
+            wallet = Wallet(path_secret_key=os.environ["KEY_PATH"], unspent_coins=unspent_coins)
             mempool = Mempool()
             proc_handler = ProcessingHandler(blockchain, unspent_coins, wallet, mempool)
             node = Node(addr, proc_handler, 1)
@@ -340,11 +340,10 @@ class TestProcessingHandler(TestNetworkBase):
         blockchain = sender.proc_handler.blockchain
         subsidy = Trx(blockchain.height, wallet.public_key)
         await mine_some_blocks(1, sender, True, [subsidy])
-        wallet.updateBalance(deepcopy(blockchain.last_block.transactions))
         value = 25
         new_trx = None
         errors = []
-        if value <= wallet.n_amount:
+        if value <= wallet.balance:
             new_trx = Trx.make_trx(sum(list(wallet.out_coins.values()), []),
                                    wallet.public_key, receiver.addr.pub_key, 25)
             mempool = sender.proc_handler.mempool
@@ -366,11 +365,10 @@ class TestProcessingHandler(TestNetworkBase):
         blockchain = sender.proc_handler.blockchain
         subsidy = Trx(blockchain.height, wallet.public_key)
         await mine_some_blocks(1, sender, True, [subsidy])
-        wallet.updateBalance(deepcopy(blockchain.last_block.transactions))
         value = 25
         new_trx = None
         errors = []
-        if value <= wallet.n_amount:
+        if value <= wallet.balance:
             new_trx = Trx.make_trx(sum(list(wallet.out_coins.values()), []),
                                    wallet.public_key, receiver.addr.pub_key, 25)
             new_trx.inputs[0].value += 1  # corrupting

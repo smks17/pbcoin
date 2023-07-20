@@ -195,7 +195,6 @@ class ProcessingHandler:
                 else:
                     last = self.blockchain.last_block
                     last.update_outputs(self.unspent_coins)
-                    self.wallet.updateBalance(deepcopy(last.transactions))
                     logging.info(f"New mined block from {message.addr.hostname}")
                     logging.debug(f"info mined block from {message.addr.hostname}: {block.get_data()}")
                     ok_msg = Message(True, ConnectionCode.OK_MESSAGE, message.addr)
