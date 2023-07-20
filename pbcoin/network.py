@@ -15,7 +15,7 @@ from typing import (
 )
 
 import pbcoin.config as conf
-from pbcoin.block import Block
+from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.blockchain import BlockChain
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
 from pbcoin.logger import getLogger, log_error_message
@@ -228,8 +228,14 @@ class Node(Connection):
                 continue  # NOTE: Here is not too much matter
             if not response.status:
                 if response.type_ == Errno.BAD_BLOCK_VALIDATION:
-                    pass  # TODO: better handle error
-                if response.type_ == Errno.OBSOLETE_BLOCK:
+                    pre_hash = self.proc_handler.blockchain[block.block_height - 1].__hash__
+                    validation = block.is_valid_block(self.proc_handler.unspent_coins,
+                                                      pre_hash=pre_hash)
+                    if validation != BlockValidationLevel.ALL():
+                        logging.error("Bad block is mined")
+                        errors.append((response.addr, response.type_, response.data))
+                        break
+                elif response.type_ == Errno.OBSOLETE_BLOCK:
                     request = Message(status = True,
                                       type_ = ConnectionCode.GET_BLOCKS,
                                       addr = dst_addr,
@@ -248,11 +254,11 @@ class Node(Connection):
                             logging.debug("Bad validation blocks that it sent for get blocks")
                     else:
                         logging.error("Bad request send for get blocks")
-                errors.append((response.addr, response.type_, response.data))
-                log_error_message(logging,
-                                  dst_addr.hostname,
-                                  message.type_.name,
-                                  response.type_.name)
+                        errors.append((response.addr, response.type_, response.data))
+                        log_error_message(logging,
+                                          dst_addr.hostname,
+                                          message.type_.name,
+                                          res.type_.name)
         return errors
 
     async def send_new_trx(self, trx: Trx, wallet: Wallet):
