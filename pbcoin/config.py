@@ -32,6 +32,7 @@ class GlobalCfg:
         if cls.network:
             NetworkCfg.update(option)
         LoggerCfg.update(option)
+        DataBaseCfg.update(option)
         cls.config = True
 
 
@@ -78,11 +79,28 @@ class LoggerCfg:
         cls.do_logging = option.get("logging", True)
 
 
+class DataBaseCfg:
+    path: str
+    blocks_table: str
+    trx_table: str
+    coin_table: str
+    fetch: bool
+
+    @classmethod
+    def update(cls, option: dict[str, Any]):
+        cls.path = option.get("db_path", DB_PATH)
+        cls.blocks_table = option.get("block_table", DB_BLOCKS_TABLE)
+        cls.trx_table = option.get("logging_date_format", DB_TRX_TABLE)
+        cls.coins_table = option.get("logging_date_format", DB_COINS_TABLE)
+        cls.fetch = option.get("fetch_db", True)
+
+
 class Settings:
     def __init__(self):
         self.glob = GlobalCfg()
         self.network =  NetworkCfg()
         self.logger = LoggerCfg()
+        self.database = DataBaseCfg()
         if OS_TYPE == 'win':
             # do not error when close task in windows
             # TODO: maybe change close functions

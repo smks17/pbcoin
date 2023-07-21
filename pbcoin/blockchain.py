@@ -11,7 +11,9 @@ from typing import (
 )
 
 import pbcoin.config as conf
+import pbcoin.core as core
 from pbcoin.block import Block, BlockValidationLevel
+from pbcoin.db import DB
 from pbcoin.mempool import Mempool
 from pbcoin.trx import Coin, Trx
 
@@ -53,10 +55,14 @@ class BlockChain:
         block_: Block,
         unspent_coins: Optional[Dict[str, Coin]]=None,
         ignore_validation=False,
-        difficulty: int = None  # almost just for unittest
+        fetch_db: Optional[bool] = None,
+        difficulty: int = None,  # almost just for unittest
+        db: Optional[DB] = None
     ) -> Optional[BlockValidationLevel]:
         if difficulty is None:
             difficulty = conf.settings.glob.difficulty
+        if fetch_db is None:
+            fetch_db = conf.settings.database.fetch
         if not ignore_validation:
             validation = block_.is_valid_block(
                 unspent_coins, pre_hash=self.last_block_hash, difficulty=difficulty)
@@ -66,6 +72,8 @@ class BlockChain:
             self.blocks.append(deepcopy(block_))
             if unspent_coins is not None:
                 self.last_block.update_outputs(unspent_coins)
+            if fetch_db:
+                self.fetch_db(db)
         if (not self.is_full_node) and (self.__sizeof__() >= self.cache):
             self.blocks.pop(0)
         return validation
@@ -167,6 +175,23 @@ class BlockChain:
         if len(self.blocks) == 0:
             return []
         return [block.__hash__ for block in self.blocks[first_index: last_index]]
+
+    def fetch_db(self, db: Optional[DB] = None):
+        if db is None:
+            db = core.DATABASE
+        block_header = db.get_last_block()
+        distance = self.height - block_header["height"]
+        if distance > 0:
+            # Should insert to db
+            for i in range(self.height - distance):
+                # TODO: catch sql error inside db
+                db.insert_block(self.blocks[i])
+        elif distance < 0:
+            # Should query from db
+            for i in range(block_header["height"] - distance):
+                block_data = db.get_block(index=i)
+                block = Block.from_json_data_full(block_data)
+                self.add_new_block(block, fetch_db=False)
 
     @staticmethod
     def check_blockchain(

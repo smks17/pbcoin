@@ -9,6 +9,7 @@ from typing import NewType, Union
 
 import pbcoin.config as conf
 from pbcoin.block import Block
+from pbcoin.db import DB
 from pbcoin.mempool import Mempool
 from pbcoin.cli_handler import CliServer
 from pbcoin.utils.netbase import Addr
@@ -30,7 +31,7 @@ def create_core():
     core.BLOCK_CHAIN = BlockChain([])
     core.MEMPOOL = Mempool()
     core.MINER = Mine(core.BLOCK_CHAIN, core.WALLET, core.MEMPOOL, core.NETWORK)
-
+    core.DATABASE = DB()
 
 inf_type = NewType("inf_type", float)
 

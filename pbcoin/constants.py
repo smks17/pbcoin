@@ -44,7 +44,7 @@ FULL_NODE: bool = False
 # Difficult level of hash block which should be less than
 #                       256 bit 1   left first 23 bit set 0
 #                     -----------------------------------
-DIFFICULTY: int = (2 ** 256 - 1) >> (10)
+DIFFICULTY: int = (2 ** 256 - 1) >> (22)
 
 # TODO: could be better it isn't constant
 # the amount of miner prize for mine a block
@@ -110,3 +110,16 @@ LOGGING_LEVEL: int = logging.INFO
 
 # File for write log
 LOGGING_FILENAME = BASE_PATH / "pbcoin.log"
+
+############Database###############
+# Path to database
+DB_PATH: str = r"./pbcoin.db"  # TODO: use absolute path
+
+# Table name blocks in database
+DB_BLOCKS_TABLE: str = "Blocks"
+
+# Table name transactions in database
+DB_TRX_TABLE: str = "Trx"
+
+# Table name coins in database
+DB_COINS_TABLE: str = "Coins"

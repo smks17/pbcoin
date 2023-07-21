@@ -96,6 +96,6 @@ and coin contains:
 - [ ] unittest
 - [ ] dockerize
 - [ ] separate wallet and node
-- [ ] database
+- [x] database
 - [ ] modular
 - [ ] add test mode for unittests

@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from pbcoin.blockchain import BlockChain
+    from pbcoin.db import DB
     from pbcoin.mempool import Mempool
     from pbcoin.mine import Mine
     from pbcoin.network import Node
@@ -15,3 +16,4 @@ WALLET: Wallet = None
 ALL_OUTPUTS = dict()  # TODO: move to database
 NETWORK: Optional[Node] = None
 MEMPOOL: Optional[Mempool] = None
+DATABASE: Optional[DB] = None

@@ -22,3 +22,5 @@ MANIFEST
 .key/
 
 env/
+
+*.db
