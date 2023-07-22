@@ -1,6 +1,7 @@
 import os
 import pytest
 
+import pbcoin.config as conf
 from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.blockchain import BlockChain
 from pbcoin.mempool import Mempool
@@ -10,8 +11,6 @@ from pbcoin.wallet import Wallet
 
 
 class TestTrx:
-    DIFFICULTY = (2 ** 256 - 1) >> (2)
-
     @pytest.fixture
     async def mine_some_blocks(self, request):
         n = request.param
@@ -23,7 +22,7 @@ class TestTrx:
             if len(blockchain) > 0:
                 pre_hash = blockchain[-1].__hash__
             new_block = Block(pre_hash, i+1, Trx(1, "miner"))
-            await miner.mine(new_block, difficulty=self.DIFFICULTY)
+            await miner.mine(new_block, difficulty=conf.settings.glob.difficulty)
         self.__class__.blockchain = BlockChain(blockchain)
         last_block = self.__class__.blockchain.last_block
         assert self.__class__.blockchain.height > 0, "Didn't mine anything"
@@ -34,7 +33,7 @@ class TestTrx:
     @pytest.mark.parametrize("mine_some_blocks", [1, 2], indirect=True)
     async def test_mine_some_block(self, mine_some_blocks):
         """just test mine a valid block or not (with no extra transactions)"""
-        result = BlockChain.check_blockchain(self.blockchain.blocks, {}, self.DIFFICULTY)
+        result = BlockChain.check_blockchain(self.blockchain.blocks, {}, conf.settings.glob.difficulty)
         assert result == (True, None, BlockValidationLevel.ALL())
 
     async def test_mine_with_transaction(self):
@@ -50,10 +49,10 @@ class TestTrx:
 
         # mine one block with no transaction
         new_block = blockchain.setup_new_block(Trx(1, wallet.public_key), mempool)
-        await miner.mine(new_block, add_block=False, difficulty=self.DIFFICULTY)
+        await miner.mine(new_block, add_block=False, difficulty=conf.settings.glob.difficulty)
         blockchain.add_new_block(new_block,
                                  unspent_coins=unspent_coins,
-                                 difficulty=self.DIFFICULTY)
+                                 difficulty=conf.settings.glob.difficulty)
         # make a new transaction for testing mining one block
         new_trx = Trx(
             2,
@@ -74,11 +73,11 @@ class TestTrx:
 
         # mine second block with new transaction and check it
         new_block = blockchain.setup_new_block(Trx(2, wallet.public_key), miner.mempool)
-        await miner.mine(new_block, add_block=False, difficulty=self.DIFFICULTY)
+        await miner.mine(new_block, add_block=False, difficulty=conf.settings.glob.difficulty)
         blockchain.add_new_block(new_block,
                                  ignore_validation=True,
                                  unspent_coins=unspent_coins,
-                                 difficulty=self.DIFFICULTY)
+                                 difficulty=conf.settings.glob.difficulty)
         assert len(blockchain.blocks) == 2, "Could not Mine new block"
         last_block = blockchain.last_block
         assert len(last_block.transactions) == 2, "Transactions didn't add to mined block"
@@ -116,8 +115,8 @@ class TestTrx:
 
         # mine third block with new transaction and check it
         new_block = blockchain.setup_new_block(Trx(3, wallet.public_key), miner.mempool)
-        await miner.mine(new_block, add_block=False, difficulty=self.DIFFICULTY)
-        blockchain.add_new_block(new_block, ignore_validation=True, difficulty=self.DIFFICULTY)
+        await miner.mine(new_block, add_block=False, difficulty=conf.settings.glob.difficulty)
+        blockchain.add_new_block(new_block, ignore_validation=True, difficulty=conf.settings.glob.difficulty)
         assert len(blockchain.blocks) == 3, "Could not Mine new block"
         last_block = blockchain.last_block
         assert len(last_block.transactions) == 2, "Transactions didn't add to mined block"

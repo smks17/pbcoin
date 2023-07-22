@@ -1,6 +1,8 @@
 import os
 import shutil
 
+import pbcoin.config as conf
+
 
 #TODO: just one time generates some keys and in unittest just use them
 def pytest_sessionstart(session):
@@ -9,6 +11,12 @@ def pytest_sessionstart(session):
     os.environ["KEY_PATH"] = path
     if not os.path.exists(path):
         os.mkdir(path)
+    test_options = {
+        "difficulty": (2 ** 256 - 1) >> (2),
+        "logging": False,
+        "fetch_db": False  # TODO: Temporarily
+    }
+    conf.settings.update(test_options)
 
 
 def pytest_sessionfinish(session, exitstatus):

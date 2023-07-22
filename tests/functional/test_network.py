@@ -4,6 +4,7 @@ import os
 
 import pytest
 
+import pbcoin.config as conf
 from pbcoin.block import Block
 from pbcoin.blockchain import BlockChain
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
@@ -127,13 +128,6 @@ class TestMakeConnection(TestNetworkBase):
 
 
 class TestProcessingHandler(TestNetworkBase):
-    DIFFICULTY = (2 ** 256 - 1) >> 2
-
-    @pytest.fixture(scope="class", autouse=True)
-    def set_difficulty(self):
-        import pbcoin.config as conf
-        conf.settings.update({"difficulty": self.DIFFICULTY})
-
     @pytest.fixture
     def mine_some_blocks(self):
         async def inner(n_mine: int, node: Node, send_mined_block=False, subsidies=None):
@@ -195,7 +189,7 @@ class TestProcessingHandler(TestNetworkBase):
     async def test_handling_bad_mined_block(self, run_nodes, mine_some_blocks):
         sender = self.nodes[0]
         blocks = await mine_some_blocks(1, sender, False)
-        blocks[0].block_hash = hex(self.DIFFICULTY + 1)
+        blocks[0].block_hash = hex(conf.settings.glob.difficulty + 1)
         receiver = self.nodes[1]
         errors = await sender.send_mined_block(blocks[0])
         # assertion

@@ -4,14 +4,13 @@ from typing import List
 
 import pytest
 
+import pbcoin.config as conf
 from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.blockchain import BlockChain
 from pbcoin.trx import Coin, Trx
 
 
 class TestBlockchain:
-    DIFFICULTY = (2 ** 256 - 1) >> (2)
-
     @pytest.fixture
     def setup_blockchains(self, request):
         """make n blockchain from request param and result save in self.blockchains
@@ -37,7 +36,7 @@ class TestBlockchain:
             temp_blocks.append(Block(pre_hash, i+1))
             while True:
                 temp_blocks[-1].set_mined()
-                if int(temp_blocks[-1].calculate_hash(), 16) <= self.DIFFICULTY:
+                if int(temp_blocks[-1].calculate_hash(), 16) <= conf.settings.glob.difficulty:
                     break
                 temp_blocks[-1].set_nonce(temp_blocks[-1].nonce+1)
         for i in range(n_blockchains):
@@ -55,7 +54,7 @@ class TestBlockchain:
                 blockchain.append(Block(pre_hash, height))
                 while True:
                     blockchain[-1].set_mined()
-                    if int(blockchain[-1].calculate_hash(), 16) <= self.DIFFICULTY:
+                    if int(blockchain[-1].calculate_hash(), 16) <= conf.settings.glob.difficulty:
                         break
                     blockchain[-1].set_nonce(blockchain[-1].nonce+1)
             sleep(0.001)
@@ -70,19 +69,19 @@ class TestBlockchain:
         indirect = True
     )
     def test_blockchain_checker(self, setup_blockchains):
-        res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, self.DIFFICULTY)
+        res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, conf.settings.glob.difficulty)
         assert res == (True, None, BlockValidationLevel.ALL())
 
     @pytest.mark.parametrize("setup_blockchains", [(1, 3, (0,))], indirect = True)
     def test_bad_hash_blockchain_block_checker(self, setup_blockchains):
-        self.blockchains[0].last_block.block_hash = hex(self.DIFFICULTY + 2)
-        res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, self.DIFFICULTY)
+        self.blockchains[0].last_block.block_hash = hex(conf.settings.glob.difficulty + 2)
+        res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, conf.settings.glob.difficulty)
         assert res == (False, 2, BlockValidationLevel.ALL(BlockValidationLevel.DIFFICULTY))
 
     @pytest.mark.parametrize("setup_blockchains", [(1, 3, (0,))], indirect = True)
     def test_bad_previous_hash_blockchain_block_checker(self, setup_blockchains):
         self.blockchains[0].blocks[1].previous_hash = "0"
-        res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, self.DIFFICULTY)
+        res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, conf.settings.glob.difficulty)
         assert res == (False, 1, BlockValidationLevel.ALL(BlockValidationLevel.PREVIOUS_HASH))
 
     @pytest.mark.parametrize("setup_blockchains", [(1, 3, (0,))], indirect = True)
@@ -90,7 +89,7 @@ class TestBlockchain:
         self.blockchains[0].blocks[1].add_trx(
             Trx(2, "owner", [Coin("owner1", 0)], [Coin("owner2", 0, value_=20)]))
         self.blockchains[0].blocks[1].transactions[0].hash_trx = "Bluh"
-        res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, self.DIFFICULTY)
+        res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, conf.settings.glob.difficulty)
         assert res == (False, 1, BlockValidationLevel.PREVIOUS_HASH)
 
     @pytest.mark.parametrize(
@@ -120,7 +119,7 @@ class TestBlockchain:
         indirect=True
     )
     def test_resolve(self, setup_blockchains):
-        res = self.blockchains[0].resolve(self.blockchains[1].blocks, {}, self.DIFFICULTY)
+        res = self.blockchains[0].resolve(self.blockchains[1].blocks, {}, conf.settings.glob.difficulty)
         assert res == (True, None, BlockValidationLevel.ALL()), \
             "Problem in resolve blockchain"
         assert self.blockchains[0].blocks == self.blockchains[1].blocks, \
@@ -134,7 +133,7 @@ class TestBlockchain:
     def test_do_not_resolve_bad_chain(self, setup_blockchains):
         last_block = self.blockchains[1].blocks[-1]
         last_block.previous_hash = "nonsense"  # bad previous hash
-        result = self.blockchains[0].resolve(self.blockchains[1].blocks, {}, self.DIFFICULTY)
+        result = self.blockchains[0].resolve(self.blockchains[1].blocks, {}, conf.settings.glob.difficulty)
         actual = (False, 2, BlockValidationLevel.ALL(BlockValidationLevel.PREVIOUS_HASH))
         assert result == actual, "Problem in checking other blockchain for resolving"
         assert self.blockchains[0].blocks != self.blockchains[1].blocks, \
