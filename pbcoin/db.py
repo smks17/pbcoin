@@ -17,7 +17,7 @@ class DB:
                  coins_table_name: Optional[str] = None):
         if db_path is None:
             db_path = conf.settings.database.path
-        self.db = Sqlite(db_path)
+        self.db = Sqlite(db_path, check_same_thread=False)
         if blocks_table_name is None:
             blocks_table_name = conf.settings.database.blocks_table
         self.blocks_table_name = blocks_table_name
@@ -63,7 +63,7 @@ class DB:
             coin_data = deepcopy(coin)
         coin_data |= {"is_input": is_input}
         coin_data["c_index"] = coin_data.pop("index")
-        self.db.insert(coin_data, self.trx_coins_name)
+        self.db.insert(coin_data, self.coins_table_name)
 
     def get_block(self, hash_str: Optional[str] = None, index: Optional[int] = None) -> Block:
         assert ((hash_str is not None) ^ (index is not None)),  \
@@ -98,7 +98,10 @@ class DB:
         return block_data
 
     def get_last_block(self):
-        q = self.db.query("*, MIN(Price) AS height", self.blocks_table_name)[0]
+        q = self.db.query("*, MAX(height) AS height", self.blocks_table_name)
+        if not q:
+            return None
+        q = q[0]
         block_header = {
             "hash": q[0],
             "height": int(q[1]),

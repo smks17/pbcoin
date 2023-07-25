@@ -180,15 +180,18 @@ class BlockChain:
         if db is None:
             db = core.DATABASE
         block_header = db.get_last_block()
-        distance = self.height - block_header["height"]
+        db_height = 0
+        if block_header is not None:
+            db_height = block_header["height"]
+        distance = self.height - db_height
         if distance > 0:
             # Should insert to db
-            for i in range(self.height - distance):
+            for i in range(db_height, self.height):
                 # TODO: catch sql error inside db
                 db.insert_block(self.blocks[i])
         elif distance < 0:
             # Should query from db
-            for i in range(block_header["height"] - distance):
+            for i in range(db_height - distance):
                 block_data = db.get_block(index=i)
                 block = Block.from_json_data_full(block_data)
                 self.add_new_block(block, fetch_db=False)
