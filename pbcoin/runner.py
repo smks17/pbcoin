@@ -32,6 +32,7 @@ def create_core():
     core.MEMPOOL = Mempool()
     core.MINER = Mine(core.BLOCK_CHAIN, core.WALLET, core.MEMPOOL, core.NETWORK)
     core.DATABASE = DB()
+    core.DATABASE.init()
 
 inf_type = NewType("inf_type", float)
 

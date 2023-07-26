@@ -85,6 +85,7 @@ class DataBaseCfg:
     trx_table: str
     coin_table: str
     fetch: bool
+    init_filename: str
 
     @classmethod
     def update(cls, option: dict[str, Any]):
@@ -93,6 +94,7 @@ class DataBaseCfg:
         cls.trx_table = option.get("logging_date_format", DB_TRX_TABLE)
         cls.coins_table = option.get("logging_date_format", DB_COINS_TABLE)
         cls.fetch = option.get("fetch_db", True)
+        cls.init_filename = option.get("init_filename", DB_INIT_FILENAME)
 
 
 class Settings:

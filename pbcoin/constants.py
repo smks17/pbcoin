@@ -123,3 +123,6 @@ DB_TRX_TABLE: str = "Trx"
 
 # Table name coins in database
 DB_COINS_TABLE: str = "Coins"
+
+# initialize sql command script
+DB_INIT_FILENAME: str = r"./pbcoin/init.sql"

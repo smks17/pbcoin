@@ -28,6 +28,11 @@ class DB:
             coins_table_name = conf.settings.database.coins_table
         self.coins_table_name = coins_table_name
 
+    def init(self, init_filename: Optional[str] = None):
+        if init_filename is None:
+            init_filename = conf.settings.database.init_filename
+        self.db.run_sql_file(init_filename)
+
     def insert_block(self, block: Block | Dict[str, Any]):
         if isinstance(block, Block):
             data = block.get_data(is_full_block=True, is_POSIX_timestamp=True)
