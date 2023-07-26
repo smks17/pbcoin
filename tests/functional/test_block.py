@@ -32,8 +32,8 @@ class TestBlock:
         temp_owner_key = "0x222"
         temp_trx = Trx(1, temp_owner_key, [], [Coin(temp_owner_key, 0)])
         block.add_trx(temp_trx)
-        assert block.transactions[0].outputs[0].trx_hash == temp_trx.__hash__, \
-            "Problem in output coin trx_hash value"
+        assert block.transactions[0].outputs[0].created_trx_hash == temp_trx.__hash__, \
+            "Problem in output coin created_trx_hash value"
         assert temp_trx.__hash__ in block.get_list_hashes_trx(), \
             "Problem in no added new transaction to the block or"  \
             "bad block_hash assign for transaction data"

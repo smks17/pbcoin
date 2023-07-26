@@ -58,8 +58,8 @@ class TestTrx:
             2,
             wallet.public_key,
             blockchain.last_block.transactions[-1].outputs,
-            [Coin(wallet.public_key, 0, value_=30),
-             Coin("fake1", 1, value_=20)]
+            [Coin(wallet.public_key, 0, value=30),
+             Coin("fake1", 1, value=20)]
         )
         # add new transaction to mempool and check it
         assert mempool.add_new_transaction(new_trx,
@@ -88,7 +88,7 @@ class TestTrx:
         ]
         assert last_block.transactions[1].outputs == actual_outputs, "Bad output transaction"
         actual_inputs = [
-            Coin(wallet.public_key, 0, blockchain.blocks[0].transactions[0].hash_trx, 50)
+            Coin(wallet.public_key, 0, blockchain.blocks[0].transactions[0].hash_trx, 50, last_block.transactions[1].__hash__, 0)
         ]
         assert last_block.transactions[1].inputs == actual_inputs, "Bad input transaction"
         assert len(miner.mempool) == 0, "Didn't delete mempool transaction that was mined"
@@ -97,11 +97,11 @@ class TestTrx:
             Trx(3,
                 wallet.public_key,
                 [blockchain.last_block.transactions[-1].outputs[0]],
-                [Coin("fake2", 1, value_=30)]),
+                [Coin("fake2", 1, value=30)]),
             Trx(3,
                 wallet.public_key,
                 [blockchain.last_block.transactions[-1].outputs[1]],
-                [Coin("fake1", 1, value_=20)])
+                [Coin("fake1", 1, value=20)])
         ]
         mempool.max_limit_trx = 1
         # add new transaction to mempool and check it
@@ -126,7 +126,7 @@ class TestTrx:
         ]
         assert last_block.transactions[1].outputs == actual_outputs, "Bad output transaction"
         actual_inputs = [
-            Coin(wallet.public_key, 0, blockchain.blocks[1].transactions[1].hash_trx, 30)
+            Coin(wallet.public_key, 0, blockchain.blocks[1].transactions[1].hash_trx, 30, last_block.transactions[1].__hash__, 0)
         ]
         assert last_block.transactions[1].inputs == actual_inputs, "Bad input transaction"
         assert len(miner.mempool) == 1, \

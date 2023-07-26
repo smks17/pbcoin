@@ -87,7 +87,7 @@ class TestBlockchain:
     @pytest.mark.parametrize("setup_blockchains", [(1, 3, (0,))], indirect = True)
     def test_bad_trx_hash_blockchain_block_checker(self, setup_blockchains):
         self.blockchains[0].blocks[1].add_trx(
-            Trx(2, "owner", [Coin("owner1", 0)], [Coin("owner2", 0, value_=20)]))
+            Trx(2, "owner1", [Coin("owner1", 0, value=20)], [Coin("owner2", 0, value=20)]))
         self.blockchains[0].blocks[1].transactions[0].hash_trx = "Bluh"
         res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, conf.settings.glob.difficulty)
         assert res == (False, 1, BlockValidationLevel.PREVIOUS_HASH)

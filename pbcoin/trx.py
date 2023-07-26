@@ -14,11 +14,19 @@ from pbcoin.constants import SUBSIDY
 
 
 class Coin:
-    def __init__(self, owner_: str, index_: int, trx_hash_: str = "", value_=SUBSIDY):
-        self.owner = owner_
-        self.value = value_
-        self.trx_hash = trx_hash_
-        self.index = index_
+    def __init__(self,
+                 owner: str,
+                 out_index: int,
+                 created_trx_hash: str = "",
+                 value=SUBSIDY,
+                 trx_hash: Optional[str]=None,
+                 in_index: Optional[int]=None):
+        self.owner = owner
+        self.value = value
+        self.created_trx_hash = created_trx_hash
+        self.out_index = out_index
+        self.trx_hash = trx_hash
+        self.in_index = in_index
         self.hash_coin = self.calculate_hash()
 
     def make_output(self, recipient_key: str, amount: float) -> Tuple[bool, int]:
@@ -43,10 +51,10 @@ class Coin:
         outputs = []
         remain = self.value - amount
         if remain > 0:
-            outputs.append(Coin(self.owner, len(outputs), value_=remain))
-            outputs.append(Coin(recipient_key, len(outputs), value_=amount))
+            outputs.append(Coin(self.owner, len(outputs), value=remain))
+            outputs.append(Coin(recipient_key, len(outputs), value=amount))
         else:
-            outputs.append(Coin(recipient_key, len(outputs), value_=amount))
+            outputs.append(Coin(recipient_key, len(outputs), value=amount))
 
         return outputs, remain
 
@@ -56,31 +64,42 @@ class Coin:
         - hash: calculated of coin hash
         - value: the amount of this coin
         - owner: who is (or was) this coin for
-        - trx_hash: exists in which transaction
-        - index: index of transaction in the block that contains this transaction
+        - created_trx_hash: was created in which transaction
+        - out_index: index of transaction in the block that was created
+        and if the coin was spent in addition:
+        - trx_hash: the hash of trx which spent in
+        - in_index: index of transaction in the block that was spent
         """
-        return {
+        data = {
             "hash": self.__hash__,
             "value": self.value,
             "owner": self.owner,
-            "trx_hash": self.trx_hash,
-            "index": self.index
+            "created_trx_hash": self.created_trx_hash,
+            "out_index": self.out_index,
         }
+        if self.is_spent:
+            data.update({"trx_hash": self.trx_hash, "in_index": self.in_index})
+        return data
 
     def __eq__(self, __o: object) -> bool:
-        return (self.trx_hash == __o.trx_hash and
-                self.index == __o.index and
+        return (self.created_trx_hash == __o.created_trx_hash and
+                self.in_index == __o.in_index and
                 self.owner == __o.owner and
                 self.value == __o.value)
 
     def __repr__(self) -> str:
-        return f"{self.value} from {self.owner[:8]}"  \
-               f"in transaction {self.trx_hash[:8]} with index {self.index}"
+        if self.is_spent:
+            return f"{self.value} from {self.owner[:8]} "  \
+                f"created in transaction {self.created_trx_hash[:8]} with index {self.in_index} "  \
+                f"was spent in transaction {self.trx_hash[:8]} with index {self.out_index}"
+        return f"{self.value} from {self.owner[:8]} "  \
+                f"created in transaction {self.created_trx_hash[:8]} with index {self.in_index} "  \
+                f"and be not spent"
 
     def calculate_hash(self) -> str:
         """calculate this trx hash and return hex hash"""
         cal_hash = sha256(
-            (f"{self.value}{self.owner}{self.trx_hash}{self.index}").encode()
+            (f"{self.value}{self.owner}{self.created_trx_hash}{self.in_index}").encode()
         ).hexdigest()
         self.coin_hash = cal_hash
         return cal_hash
@@ -90,16 +109,24 @@ class Coin:
         return self.calculate_hash() if not self.hash_coin else self.hash_coin
 
     def check_input_coin(self, unspent_coins: dict[str, Coin]) -> bool:
-        trx_hash_ = self.trx_hash
-        my_unspent = unspent_coins.get(trx_hash_, None)
+        trx_hash = self.created_trx_hash
+        my_unspent = unspent_coins.get(trx_hash, None)
         if my_unspent is not None:
-            owner_coin = my_unspent[self.index]
+            owner_coin = my_unspent[self.out_index]
             if owner_coin.owner == self.owner:
                 return True
             else:
                 return False
         else:
             return False
+
+    def spend(self, trx_hash, index):
+        self.trx_hash = trx_hash
+        self.in_index = index
+
+    @property
+    def is_spent(self):
+        return self.trx_hash is not None
 
 
 class Trx:
@@ -151,7 +178,7 @@ class Trx:
             self.hash_trx = self.calculate_hash()
             self.inputs = inputs_  # TODO: check input not to be empty
             for out_coin in outputs_:
-                out_coin.trx_hash = self.hash_trx
+                out_coin.created_trx_hash = self.hash_trx
             self.outputs = outputs_
             self.is_generic = False
         self.public_key = sender_key  # TODO: should be lists
@@ -189,8 +216,7 @@ class Trx:
         for coin in owner_coins:
             if coin.owner == sender_key:
                 inputs.append(coin)
-                coin_output, remain_coin = coin.make_output(
-                    recipient_key, remain)
+                coin_output, remain_coin = coin.make_output(recipient_key, remain)
                 if remain_coin <= 0:
                     remain -= coin.value
                 else:
@@ -198,7 +224,6 @@ class Trx:
                 outputs += coin_output
                 if remain == 0:
                     break
-
         if remain != 0:
             return None
         trx = Trx(0, sender_key, inputs, outputs)
@@ -207,8 +232,11 @@ class Trx:
 
     def set_hash_coins(self):
         """set the output coins of trx to hash of this trx"""
-        for out_coin in self.outputs:
-            out_coin.trx_hash = self.hash_trx
+        for i, in_coin in enumerate(self.inputs):
+            in_coin.spend(self.hash_trx, i)
+        for i, out_coin in enumerate(self.outputs):
+            out_coin.created_trx_hash = self.hash_trx
+            out_coin.out_index = i
 
     def calculate_hash(self) -> str:
         """calculate this trx hash and return hex hash"""
@@ -266,7 +294,7 @@ class Trx:
             if self.time <= datetime(2022, 1, 1).timestamp():
                 return False
             # check trx hash output coin
-            if not all([out_coin.trx_hash == self.hash_trx for out_coin in self.outputs]):
+            if not all([out_coin.created_trx_hash == self.hash_trx for out_coin in self.outputs]):
                 return False
         return True
 

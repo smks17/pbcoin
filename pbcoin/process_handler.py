@@ -281,13 +281,15 @@ class ProcessingHandler:
         # make trx from receive data
         for in_coin in trx_inputs:
             inputs.append(Coin(in_coin["owner"],
-                               in_coin["index"],
+                               in_coin["out_index"],
+                               in_coin["created_trx_hash"],
+                               in_coin["value"],
                                in_coin["trx_hash"],
-                               in_coin["value"]))
+                               in_coin["in_index"]))
         for out_coin in trx_outputs:
             outputs.append(Coin(out_coin["owner"],
-                                out_coin["index"],
-                                out_coin["trx_hash"],
+                                out_coin["out_index"],
+                                out_coin["created_trx_hash"],
                                 out_coin["value"]))
         time = trx_data['time']
         new_trx = Trx(self.blockchain.height,

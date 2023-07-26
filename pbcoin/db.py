@@ -55,20 +55,22 @@ class DB:
         inputs = trx_data.pop("inputs")
         outputs = trx_data.pop("outputs")
         trx_data["t_index"] = trx_data.pop("index")
-        for coin_data in inputs:
-            self.insert_coin(coin_data, True)
-        for coin_data in outputs:
-            self.insert_coin(coin_data, False)
+        for coin_data in inputs + outputs:
+            self.insert_coin(coin_data)
         self.db.insert(trx_data, self.trx_table_name)
 
-    def insert_coin(self, coin: Coin | Dict[str, Any], is_input: bool):
+    def insert_coin(self, coin: Coin | Dict[str, Any]):
         if isinstance(coin, Coin):
             coin_data = coin.get_data()
         else:
             coin_data = deepcopy(coin)
-        coin_data |= {"is_input": is_input}
-        coin_data["c_index"] = coin_data.pop("index")
-        self.db.insert(coin_data, self.coins_table_name)
+        q = self.get_coin(coin_hash=coin_data["hash"])
+        if not q:
+            self.db.insert(coin_data, self.coins_table_name)
+        else:
+            self.db.update([("hash", coin_data["hash"])],
+                           coin_data.items(),
+                           self.coins_table_name)
 
     def get_block(self, hash_str: Optional[str] = None, index: Optional[int] = None) -> Block:
         assert ((hash_str is not None) ^ (index is not None)),  \
@@ -89,12 +91,6 @@ class DB:
         # TODO: get by order index
         list_trx, hash_list_trx = self.get_trx(block_hash = hash_str)
         block_header["trx_hashes"] = hash_list_trx
-        for i, t_hash in enumerate(block_header["trx_hashes"]):
-            inputs = []
-            outputs = []
-            inputs, outputs = self.get_coin(trx_hash=t_hash)
-            list_trx[i]["inputs"] = inputs
-            list_trx[i]["outputs"] = outputs
         block_data = {
             "header": block_header,
             "trx": list_trx,
@@ -137,33 +133,41 @@ class DB:
                 "index": int(q[3]),
                 "time": int(q[4])
             }
+            inputs = self.get_coin(created_trx_hash=q[0])
+            trx_data["inputs"] = inputs
+            outputs = self.get_coin(trx_hash=q[0])
+            trx_data["outputs"] = outputs
             list_trx.insert(index, trx_data)
             return list_trx, hash_list_trx
 
-    def get_coin(self, coin_hash: Optional[str] = None, trx_hash: Optional[str] = None):
-        assert ((coin_hash is not None) ^ (trx_hash is not None)),  \
+    def get_coin(self,
+                 coin_hash: Optional[str] = None,
+                 created_trx_hash: Optional[str] = None,
+                 trx_hash: Optional[str] = None):
+        assert ((coin_hash is not None) ^ (created_trx_hash is not None) ^ (trx_hash is not None)),  \
             "Should been passed just (at least) coin_hash or trx_hash to query"
         if coin_hash is not None:
-            q_coins = self.db.query("*", self.trx_coins_name, [("hash", coin_hash)])
-        if trx_hash is not None:
-            q_coins = self.db.query("*", self.trx_coins_name, [("trx_hash", trx_hash)])
-        inputs = []
-        outputs = []
+            q_coins = self.db.query("*", self.coins_table_name, [("hash", coin_hash)])
+        elif created_trx_hash is not None:
+            q_coins = self.db.query("*", self.coins_table_name, [("created_trx_hash", created_trx_hash)])
+        elif trx_hash is not None:
+            q_coins = self.db.query("*", self.coins_table_name, [("trx_hash", trx_hash)])
+        coins = []
         for q in q_coins:
             coin = {
-                "hash": q[1],
-                "value": int(q[2]),
-                "owner": q[3],
-                "trx_hash": q[4],
-                "index": int(q[5])
+                "hash": q[0],
+                "created_trx_hash": q[1],
+                "in_index": int(q[2]),
+                "value": int(q[3]),
+                "owner": q[4],
             }
-            # if is input coin
-            if q[0]:
-                inputs.insert(coin["index"], coin)
-            # else is output coin
+            # if coin was spent
+            if q[5]:
+                coin.update({"trx_hash": q[5], "out_index": int(q[6])})
+                coins.insert(coin["out_index"], coin)
             else:
-                outputs.insert(coin["index"], coin)
-        return inputs, outputs
+                coins.insert(coin["in_index"], coin)
+        return coins
 
 
 # TODO: write unittest for db

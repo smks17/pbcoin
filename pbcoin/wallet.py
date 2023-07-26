@@ -96,8 +96,8 @@ class Wallet:
     @property
     def balance(self) -> int:
         amount = 0
-        for trx_hash in self.unspent_coins:
-            coins = self.unspent_coins[trx_hash]
+        for created_trx_hash in self.unspent_coins:
+            coins = self.unspent_coins[created_trx_hash]
             for coin in coins:
                 if coin.owner == self.public_key:
                     amount += coin.value
@@ -107,13 +107,13 @@ class Wallet:
     def out_coins(self) -> Dict[str, Coin]:
         """my unspent output coins"""
         my_coins = dict()
-        for trx_hash in self.unspent_coins:
-            coins = self.unspent_coins[trx_hash]
+        for created_trx_hash in self.unspent_coins:
+            coins = self.unspent_coins[created_trx_hash]
             for coin in coins:
                 if coin.owner == self.public_key:
-                    trx_coins = my_coins.get(coin.trx_hash, None)
+                    trx_coins = my_coins.get(coin.created_trx_hash, None)
                     if trx_coins is None:
-                        my_coins[coin.trx_hash] = [coin]
+                        my_coins[coin.created_trx_hash] = [coin]
                     else:
                         trx_coins.append(coin)
         return my_coins

@@ -86,8 +86,12 @@ and coin contains:
 - hash: calculated of coin hash
 - value: the amount of this coin
 - owner: who is (or was) this coin for
-- trx_hash: exists in which transaction
-- index: index of transaction in the block that contains this transaction
+- created_trx_hash: was created in which transaction
+- out_index: index of transaction in the block that was created
+
+and if the coin was spent in addition:
+- trx_hash: the hash of trx which spent in
+- in_index: index of transaction in the block that was spent
 
 # TODO
 

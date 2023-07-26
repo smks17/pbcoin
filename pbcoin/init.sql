@@ -18,10 +18,11 @@ CREATE TABLE IF NOT EXISTS Trx (
     time DATETIME
 );
 CREATE TABLE IF NOT EXISTS Coins (
-    is_input BOOLEAN NOT NULL, 
     hash VARCHAR(64) NOT NULL PRIMARY KEY,
+    created_trx_hash VARCHAR(64) NOT NULL,
+    out_index BIGINT NOT NULL,
     value BIGINT NOT NULL,
     owner VARCHAR(64) NOT NULL,
-    trx_hash VARCHAR(64) NOT NULL,
-    c_index BIGINT NOT NULL
+    trx_hash VARCHAR(64),
+    in_index BIGINT
 );

@@ -39,7 +39,13 @@ class Sqlite:
             script = file.read()
         commands = script.split(";")
         for command in commands:
-            self.execute(command)
+            try:
+                self.execute(command, log=False, do_raise=True)
+            except:
+                logging.error(f"Could not execute {filename}", exc_info=True)
+                break
+        else:
+            logging.info(f"Database initialize: {filename} executed")
 
     def insert(self, data: Dict[str, Any], table_name: str):
         keys = ",".join(list(data.keys()))
@@ -67,7 +73,7 @@ class Sqlite:
               column: str,
               table_name: str,
               statements: Optional[List[Tuple[str, Any]]] = None):
-        if statements is not None and sl:
+        if statements is not None:
             sl = []
             for s in statements:
                 if not isinstance(s[1], str):
@@ -77,17 +83,43 @@ class Sqlite:
                 sl.append(s[0] + " = " + s[1])
             sl = " AND ".join(sl)
             return self._query("SELECT", column, "FROM", table_name, "WHERE", sl)
-        return self._query("SELECT", column, "FROM", table_name)
+        q = self._query("SELECT", column, "FROM", table_name)
+        if q[0][0] is None:
+            return []
+        return q
 
     def _query(self, *args):
         self.execute(*args)
         return self._cur.fetchall()
 
-    def execute(self, *args):
+    def update(self, statements, new_values, table_name):
+        sl = []
+        for s in statements:
+            if not isinstance(s[1], str):
+                s = (s[0], str(s[1]))
+            else:
+                s = (s[0], "'" + s[1] + "'")
+            sl.append(s[0] + " = " + s[1])
+        sl = " AND ".join(sl)
+        nv = []
+        for v in new_values:
+            if not isinstance(v[1], str):
+                v = (v[0], str(v[1]))
+            else:
+                v = (v[0], "'" + v[1] + "'")
+            nv.append(v[0] + " = " + v[1])
+        nv = ",".join(nv)
+        self.execute("UPDATE ", table_name, "SET", nv, "WHERE", sl)
+
+    def execute(self, *args, log=True, do_raise=False):
         sql_command = " ".join(args)
         try:
             self._cur.execute(sql_command)
             self._con.commit()
-            logging.debug(f"Execute sql: \"" + sql_command + "\"")
-        except sqlite3.OperationalError:
-            logging.error("Fail Execute sql: \"" + sql_command + "\"", exc_info=True)
+            if log:
+                logging.debug(f"Execute sql: \"" + sql_command + "\"")
+        except Exception as sql_error:
+            if log:
+                logging.error("Fail Execute sql: \"" + sql_command + "\"", exc_info=True)
+            if do_raise:
+                raise sql_error

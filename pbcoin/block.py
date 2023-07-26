@@ -88,8 +88,11 @@ class Block:
         # TODO: implement add function in merkle tree
         self.build_merkle_tree()
         self.calculate_hash()
-        for coin in trx_.outputs:
-            coin.trx_hash = trx_.__hash__
+        for i, coin in enumerate(trx_.inputs):
+            coin.spend(trx_.__hash__, i)
+        for i, coin in enumerate(trx_.outputs):
+            coin.created_trx_hash = trx_.__hash__
+            coin.out_index = i
 
     def get_list_hashes_trx(self) -> list[str]:
         return [trx.__hash__ for trx in self.transactions]
@@ -119,17 +122,17 @@ class Block:
             for coin in in_coins:
                 # check input coin and if is valid, delete from unspent coins
                 if coin.check_input_coin(unspent_coins):
-                    my_unspent = unspent_coins[coin.trx_hash]
-                    my_unspent[coin.index] = None
+                    my_unspent = unspent_coins[coin.created_trx_hash]
+                    my_unspent[coin.out_index] = None
                     if not any(my_unspent):
                         # delete input coin from unspent_coins coins
-                        unspent_coins.pop(coin.trx_hash)
+                        unspent_coins.pop(coin.created_trx_hash)
                 else:
                     pass  # TODO
 
             # add output coins to unspent coins
             for coin in out_coins:
-                trx_hash = coin.trx_hash
+                trx_hash = coin.created_trx_hash
                 unspent_coins[trx_hash] = deepcopy(out_coins)
 
     def revert_outputs(self, unspent_coins: dict[str, Coin]):
@@ -137,16 +140,16 @@ class Block:
             in_coins = trx.inputs
             out_coins = trx.outputs
             # add input coins to unspent coins
-            for coin in in_coins:
-                trx_hash = coin.trx_hash
+            for coin in out_coins:
+                trx_hash = coin.created_trx_hash
                 unspent_coins[trx_hash] = deepcopy(out_coins)
 
-            for coin in out_coins:
-                my_unspent = unspent_coins[coin.trx_hash]
-                my_unspent[coin.index] = None
+            for coin in in_coins:
+                my_unspent = unspent_coins[coin.created_trx_hash]
+                my_unspent[coin.out_index] = None
                 if not any(my_unspent):
                     # delete output coin from unspent_coins coins
-                    unspent_coins.pop(coin.trx_hash)
+                    unspent_coins.pop(coin.created_trx_hash)
 
     def set_nonce(self, nonce_: int): self.nonce = nonce_
 
@@ -266,15 +269,17 @@ class Block:
             for coin_idx, in_coin in enumerate(each_trx['inputs']):
                 inputs.append(
                     Coin(in_coin['owner'],
-                         coin_idx,
+                         in_coin['in_index'],
+                         in_coin['created_trx_hash'],
+                         in_coin['value'],
                          in_coin['trx_hash'],
-                         in_coin['value']))
+                         in_coin['out_index']))
             outputs = []
             for coin_idx, out_coin in enumerate(each_trx['outputs']):
                 outputs.append(
                     Coin(out_coin['owner'],
                          coin_idx,
-                         out_coin['trx_hash'],
+                         out_coin['created_trx_hash'],
                          out_coin['value']))
             trxList_.append(Trx(new_block.block_height, "", inputs, outputs, each_trx['time']))
         new_block.transactions = trxList_
