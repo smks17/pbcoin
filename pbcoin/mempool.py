@@ -8,16 +8,18 @@ from pbcoin.trx import Coin, Trx
 
 
 class Mempool:
-    """ A mempool class to save and handle new transaction for adding to mempool
+    """ A mempool class to save and handle new transactions for mining in blocks.
 
     Attributes
     ----------
-        transactions: Dict[str, Trx]
-            all transaction that should be mined
-        in_mining_block: List[str]
-            those transaction that in priority for put in mining block
-        max_limit_trx: int
-            the capacity of in_mining_block
+    transactions: Dict[str, Trx]
+        All transactions should be mined. The dict key is the transaction hash and the
+        value is the transaction.
+    in_mining_transactions: List[str]
+        Those priority transactions that for putting in a mining block.
+    max_limit_trx: int
+        The capacity of in_mining_transactions. The number of transactions will be able to be
+        provided and mined in a new block.
     """
     def __init__(self, max_limit_trx: Optional[int] = None):
         if max_limit_trx is None:
@@ -26,33 +28,41 @@ class Mempool:
             self.max_limit_trx = max_limit_trx
         # all transactions that is exist in mempool (even in block that is mining)
         self.transactions: Dict[str, Trx] = dict()
-        self.in_mining_block: List[str] = []
+        self.in_mining_transactions: List[str] = []
 
     def add_in_mining(self):
-        """add the new transactions to transaction should put in mining blocks"""
-        if len(self.in_mining_block) >= self.max_limit_trx:
+        """Pics some transactions up to max_limit_trx as priority transactions to be mined"""
+        if len(self.in_mining_transactions) >= self.max_limit_trx:
             return
         # TODO: add prior for transactions for add to queue
         for trx in self.transactions:
-            if trx not in self.in_mining_block:
-                self.in_mining_block.append(trx)
+            if trx not in self.in_mining_transactions:
+                self.in_mining_transactions.append(trx)
 
     def add_new_transaction(self, trx: Trx,
                             sig: Tuple[int, int],
                             public_key: str,
                             unspent_coins: Dict[str, Coin]) -> bool:
-        """add a new transaction to the all mempool transaction and the queue for mining block
+        """Adds a new transaction to the transaction queue to will be mined later in a
+        block. First, it checks the transaction and signature then adds the transaction
+        to mempool and then will update in_mining_transactions if it's necessary.
 
         Args
         ----
         trx: Trx
-            the transaction that you want add to the mempool
+            The transaction that you want to be added to the mempool.
         sig: Tuple[int, int]
-            parameters of signature (r, s) from the transaction
+            Parameters of signature (r, s) from the transaction.
         pub_key: str
-            sender public key in hex
+            Sender public key address in hex.
         unspent_coins: Dict[str, Coin]
-            list of unspent coins until here
+            The coins that have not been spent yet. It's used to check the validation
+            transaction.
+
+        Return
+        ------
+        bool
+            Returns True if the transaction is valid.
         """
         # TODO: return why result is False
         # checking it is not repetitious transaction
@@ -69,29 +79,40 @@ class Mempool:
         return True
 
     def remove_transaction(self, trx_hash: str) -> bool:
+        """Remove a transaction from mempool and return True if exists, otherwise return
+        False
+        """
         res = self.transactions.get(trx_hash)
         if res is None:
             return False
         else:
             self.transactions.pop(trx_hash)
-            self.in_mining_block.remove(trx_hash)
+            self.in_mining_transactions.remove(trx_hash)
             return True
 
     def remove_transactions(self, list_trx: List[Trx]) -> bool:
-        for trx_hash in self.in_mining_block:
+        """Removes a list of transaction from mempool and return True if they exist,
+        otherwise return False
+        """
+        for trx_hash in self.in_mining_transactions:
             if trx_hash in list_trx:
                 self.remove_transaction(trx_hash)
 
-    def is_exist(self, trx_hash):
+    def is_exist(self, trx_hash: str):
+        """Checks a transaction is in mempool or not"""
         return trx_hash in self.transactions
 
     def get_mine_transactions(self, n_trx: Optional[int] = None) -> List[Trx]:
-        """get n transaction for put in miner block"""
+        """Pics just n transaction from in_mining_transactions and put it again in
+        in_mining_transactions (inplace). n_trx is should be less than max_limit_trx
+        """
+        # TODO: check n_trx is less than max_limit_trx
         if n_trx is None:
             n_trx = self.max_limit_trx
-        self.in_mining_block = self.in_mining_block[:n_trx]
+        self.in_mining_transactions = self.in_mining_transactions[:n_trx]
 
     def reset(self):
+        """Updates new in_mining_transactions"""
         self.get_mine_transactions()
 
     def __len__(self) -> int:
@@ -103,15 +124,15 @@ class Mempool:
         return deepcopy(self.transactions[item])
 
     def __iter__(self):
-        for trx in self.in_mining_block:
+        for trx in self.in_mining_transactions:
             yield self.transactions[trx]
 
     def __contain__(self, key):
         assert isinstance(key, str, Trx)
         if type(key) == str:
-            return key in self.in_mining_block
+            return key in self.in_mining_transactions
         else:
-            return key.__hash__ in self.in_mining_block
+            return key.__hash__ in self.in_mining_transactions
 
     def __repr__(self) -> str:
         return self.transactions.values().__repr__()

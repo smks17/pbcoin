@@ -10,6 +10,10 @@ from pbcoin.utils.sqlite import Sqlite
 
 
 class DB:
+    """The database class
+    
+    It uses to insert and query objects like ```Block```, ```Trx``` and ```Coin```.
+    """
     def __init__(self,
                  db_path: Optional[str] = None,
                  blocks_table_name: Optional[str] = None,

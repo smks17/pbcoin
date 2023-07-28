@@ -37,6 +37,13 @@ logging = getLogger(__name__)
 
 
 class Node(Connection):
+    """The Node class for interaction with other nodes. This class inherits from
+    the `Connection` class.
+    
+    See Also
+    --------
+    `class Connection` docs in `netbase.py`.
+    """
     def __init__(self,
                  addr: Addr,
                  proc_handler: ProcessingHandler,
@@ -50,14 +57,19 @@ class Node(Connection):
         self.proc_handler = proc_handler
 
     async def handle_peer(self, reader: AsyncReader, writer: AsyncWriter):
-        """ this is a callback method that
-        handles requests data that receive from other nodes"""
+        """(async) This is a callback method that handles requests for data received
+        from other nodes.
+        """
+        # get its ip port from meta data
         ip, port = writer.get_extra_info('peername')
+        # create a peer object to handle better
         peer = Peer(addr=Addr(ip, port), writer=writer, reader=reader)
+        # read data
         data = await self.read(peer.reader, peer.addr)
         if data is None:
             raise Exception("Something wrong with read method and returns None")
         try:
+            # create message
             data = data.decode()
             message = None
             #TODO: check that request is from neighbors or not
@@ -71,7 +83,9 @@ class Node(Connection):
             logging.error("Something wrong in parsing message", exec_info=True)
             return
         logging.debug('receive data: ' + data)
+        # set peer addr from that in message say
         peer.addr = message.addr  # TODO: maybe it's better right check for pub_key
+        # run handler in a async task
         if not conf.settings.glob.debug:
             self.tasks.append(
                 asyncio.create_task(self.proc_handler.handle(message, peer, self))
@@ -82,7 +96,9 @@ class Node(Connection):
             await task
 
     async def listen(self):
-        """start listening requests from other nodes and callback self.handle_peer"""
+        """(async) Start listening requests from other nodes and callback
+        `self.handle_peer`
+        """
         try:
             ip_host = self.addr.ip
             port_host = self.addr.port
@@ -103,12 +119,14 @@ class Node(Connection):
                 self.is_listening = False
 
     def add_neighbor(self, new_addr: Addr):
+        """Just adds new_addr to its neighbors if possible"""
         if not self.is_my_neighbor(new_addr):
             self.neighbors[new_addr.pub_key] = new_addr
         else:
             pass  # TODO: handle error
 
     def delete_neighbor(self, addr: Addr) -> bool:
+        """Just deletes addr from its neighbors list if exists"""
         if self.is_my_neighbor(addr):
             self.neighbors.pop(addr.pub_key)
             return True
@@ -116,15 +134,21 @@ class Node(Connection):
             return False
 
     def is_my_neighbor(self, addr: Addr) -> bool:
+        """Check this addr is in its neighbors lists or not"""
         return self.neighbors.get(addr.pub_key, None) is not None
 
-    def allow_new_neighbor(self):
+    def allow_new_neighbor(self) -> bool:
+        """Checks have any place for new neighbors in which
+            were not reached TOTAL_NUMBER_CONNECTIONS or not
+        """
         return len(self.neighbors) < TOTAL_NUMBER_CONNECTIONS
 
-    def has_capacity_neighbors(self):
+    def has_capacity_neighbors(self) -> bool:
+        """Check the number of neighbors were reached TOTAL_NUMBER_CONNECTIONS or not"""
         return len(self.neighbors) == TOTAL_NUMBER_CONNECTIONS
 
     def iter_neighbors(self, forbidden: Iterable[str] = [], shuffle = True) -> Generator:
+        """Iteration to its neighbors except they are not on the forbidden list"""
         copy_neighbors_pub_key = deepcopy(list(self.neighbors.keys()))
         if shuffle:
             random.shuffle(copy_neighbors_pub_key)
@@ -146,8 +170,24 @@ class Node(Connection):
             except asyncio.CancelledError:
                 pass
 
-    async def start_up(self, seeds: List[str], get_blockchain = True):
-        """begin to find new neighbors and connect to the blockchain network"""
+    async def start_up(self, seeds: List[str], get_blockchain = True) -> None:
+        """(async) Begins to find new neighbors and connect to the blockchain network.
+
+        Starts from some nodes and requests them to find some new neighbors nodes. After
+        receiving results, tries to connect and be  neighbors with found nodes in the
+        result. In the end, try to get blockchain from self neighbors.
+
+        Parameters
+        ---------
+        seeds: List[str]
+            A list of hostname to connect them for start point.
+        get_blockchain: bool = True
+            Determines get blockchain from other nodes or not.
+
+        Return
+        ------
+        Nothing
+        """
         nodes = []
         seeds = Addr.convert_to_addr_list(seeds)
         for seed in seeds:
@@ -173,7 +213,6 @@ class Node(Connection):
                     and response.type_ == ConnectionCode.NEW_NEIGHBORS_FIND
                     and response.data['n_connections'] == 0):
                 break
-
         # sending found nodes for requesting neighbors
         for node in nodes:
             final_request = Message(True,
@@ -210,7 +249,35 @@ class Node(Connection):
                                   response.type_.name)
 
     async def send_mined_block(self, block: Block) -> List[Tuple[Addr, Errno, Dict]]:
-        """declare other nodes for find new block"""
+        """Declares other neighbor nodes that have found a newly mined block.
+
+        Creates a message containing the new block data. Then sends and waits to get a
+        response from the node to determine if there are any errors or not.
+
+        If the response says BAD_BLOCK_VALIDATION, it will be checked block and if the
+        node has said correct, it stops sending to others. otherwise, ignore that
+        response.
+
+        Else if the response says OBSOLETE_BLOCK, it will try to get new blocks from
+        other nodes.
+
+        On the other side, nodes also do the same.
+
+        Parameters
+        ----------
+        block: Block
+            The transactions that want to be declared others.
+
+        Return
+        ------
+        List[Tuple[Addr, Errno, Dict[str, Any]]]
+            Returns a list of errors the data contains: the address of which error
+            response, the type's error, and the message data that will be needed.
+        
+        See Also
+        --------
+        `ProcessHandler.handle_new_block()`
+        """
         message = Message(True,
                           ConnectionCode.MINED_BLOCK,
                           None,
@@ -234,6 +301,7 @@ class Node(Connection):
                     if validation != BlockValidationLevel.ALL():
                         logging.error("Bad block is mined")
                         errors.append((response.addr, response.type_, response.data))
+                        # TODO: Remove that from blockchain
                         break
                 elif response.type_ == Errno.OBSOLETE_BLOCK:
                     request = Message(status = True,
@@ -261,8 +329,33 @@ class Node(Connection):
                                           res.type_.name)
         return errors
 
-    async def send_new_trx(self, trx: Trx, wallet: Wallet):
-        """declare other neighbors new transaction for adding to mempool"""
+    async def send_new_trx(self, trx: Trx, wallet: Wallet) -> List[Tuple]:
+        """Declares other neighbors nodes to add to their mempool the new transaction
+        which just has been created.
+
+        Creates a message containing transaction data and the signature and self public
+        key address. Then sends that and waits to get a response from the node to
+        determine if there is any errors or not.
+
+        On the other side, nodes also do the same.
+
+        Parameters
+        ----------
+        trx: Trx
+            The transactions that want to be declared others.
+        wallet: Wallet
+            The wallet object for signing and get the public key address.
+
+        Return
+        ------
+        List[Tuple[Addr, Errno, Dict[str, Any]]]
+            Returns a list of errors the data contains: the address of which error
+            response, the type's error, and the message data that will be needed.
+        
+        See Also
+        --------
+        `ProcessHandler.handle_new_trx()`
+        """
         message = Message(True, ConnectionCode.ADD_TRX, None)
         message = message.create_data(trx = trx.get_data(with_hash=True),
                                       signature = wallet.base64Sign(trx),
@@ -291,7 +384,14 @@ class Node(Connection):
                                   response.type_.name)
         return errors
 
-    async def send_ping_to(self, dst_addr) -> bool:
+    async def send_ping_to(self, dst_addr: Addr) -> bool:
+        """Sends a Ping message to dst_addr and returns True if the response is OK,
+        otherwise False if the connection failed for some reason.
+
+        See Also
+        --------
+        `ProcessHandler.handle_ping()
+        """
         request = Message(True, ConnectionCode.PING_PONG, dst_addr)
         try:
             rec = await self.connect_and_send(dst_addr,

@@ -14,13 +14,32 @@ from pbcoin.constants import SUBSIDY
 
 
 class Coin:
+    """
+    Attributes
+    ----------
+    owner: str
+        The Address of the coin owner
+    out_index: int
+        The index in the transaction in which the coin has been created.
+    created_trx_hash: str = ""
+        The transaction hash that in which has been created.
+    value: int = SUBSIDY
+        The value of the coin.
+    trx_hash: Optional[str] = None
+        The hash of trx in which coin has been spent. (If has been spent)
+    in_index: Optional[int] = None
+        The index in the transaction in which the coin has been spent. (If has been spent)
+    hash_coin: str
+        Hash string of this coin (in hex).
+    """
     def __init__(self,
                  owner: str,
                  out_index: int,
                  created_trx_hash: str = "",
-                 value=SUBSIDY,
+                 value: int=SUBSIDY,
                  trx_hash: Optional[str]=None,
                  in_index: Optional[int]=None):
+        """Initializes attributes except hash"""
         self.owner = owner
         self.value = value
         self.created_trx_hash = created_trx_hash
@@ -29,24 +48,23 @@ class Coin:
         self.in_index = in_index
         self.hash_coin = self.calculate_hash()
 
-    def make_output(self, recipient_key: str, amount: float) -> Tuple[bool, int]:
-        """
-            makes from this coin an unspent coin for use. in fact,
-            converts coin into one or two coins that are one of them
-            is used for recipient and the other one is remain for
-            the owner it if recipient coin is less than all the first coin
+    def make_output(self, recipient_key: str, amount: float) -> Tuple[List[Coin], int]:
+        """Makes from this coin an unspent coin for use. in fact,
+        converts coin into one or two coins that are one of them
+        is used for recipient and the other one is remain for
+        the owner it if recipient coin is less than all the first coin
 
-            args
-            ----
-            recipient_key: str
-                address key of recipient
-            amount: float
-                amount which transfer to recipient wallet
+        Parameters
+        ----------
+        recipient_key: str
+            Address of recipient
+        amount: float
+            Amount values which transfer to recipient address
 
-            return
-            ------
-            Tuple[Coin]:
-                return the outputs coin
+        returns
+        -------
+        Tuple[List[coin], int]:
+            returns the outputs coin and the value which remain.
         """
         outputs = []
         remain = self.value - amount
@@ -55,21 +73,14 @@ class Coin:
             outputs.append(Coin(recipient_key, len(outputs), value=amount))
         else:
             outputs.append(Coin(recipient_key, len(outputs), value=amount))
-
         return outputs, remain
 
     def get_data(self) -> Dict[str, Any]:
-        """
-        return a dictionary that contains:
-        - hash: calculated of coin hash
-        - value: the amount of this coin
-        - owner: who is (or was) this coin for
-        - created_trx_hash: was created in which transaction
-        - out_index: index of transaction in the block that was created
-        and if the coin was spent in addition:
-        - trx_hash: the hash of trx which spent in
-        - in_index: index of transaction in the block that was spent
-        """
+        """Returns a dictionary from coin data.
+        
+        See Also
+        --------
+        `class Coin` docs"""
         data = {
             "hash": self.__hash__,
             "value": self.value,
@@ -90,14 +101,16 @@ class Coin:
     def __repr__(self) -> str:
         if self.is_spent:
             return f"{self.value} from {self.owner[:8]} "  \
-                f"created in transaction {self.created_trx_hash[:8]} with index {self.in_index} "  \
-                f"was spent in transaction {self.trx_hash[:8]} with index {self.out_index}"
+                   f"created in transaction {self.created_trx_hash[:8]} with index {self.in_index} "  \
+                   f"was spent in transaction {self.trx_hash[:8]} with index {self.out_index}"
         return f"{self.value} from {self.owner[:8]} "  \
-                f"created in transaction {self.created_trx_hash[:8]} with index {self.in_index} "  \
-                f"and be not spent"
+               f"created in transaction {self.created_trx_hash[:8]} with index {self.in_index} "  \
+               f"and be not spent"
 
     def calculate_hash(self) -> str:
-        """calculate this trx hash and return hex hash"""
+        """calculate this coin hash sha256 and set the `self.coin_hash`
+        then return hex of that.
+        """
         cal_hash = sha256(
             (f"{self.value}{self.owner}{self.created_trx_hash}{self.in_index}").encode()
         ).hexdigest()
@@ -109,6 +122,18 @@ class Coin:
         return self.calculate_hash() if not self.hash_coin else self.hash_coin
 
     def check_input_coin(self, unspent_coins: dict[str, Coin]) -> bool:
+        """Check the coin that is able to spent or not.
+        
+        Parameters
+        ----------
+        unspent_coins: Optional[Dict[str, Coin]] = None
+            The coins that have not been spent yet. It's used to check
+            the this coin is in it or not.
+
+        Return
+        ------
+        True if coin is able to spent other wise return False
+        """
         trx_hash = self.created_trx_hash
         my_unspent = unspent_coins.get(trx_hash, None)
         if my_unspent is not None:
@@ -120,9 +145,10 @@ class Coin:
         else:
             return False
 
-    def spend(self, trx_hash, index):
+    def spend(self, trx_hash: str, in_index: int):
+        """sets the coin has been spent"""
         self.trx_hash = trx_hash
-        self.in_index = index
+        self.in_index = in_index
 
     @property
     def is_spent(self):
@@ -132,38 +158,40 @@ class Coin:
 class Trx:
     """Transaction class
 
-        Attribute
-        ---------
-            inputs: List[Coin]
-                list of coins to send to recipients. there are another unspent
-                coin (output coin) in a before trx
-            outputs: List[Coin]:
-                The coins which their owner could use for sending to others
-                (if are mined)
-            time: float
-                time that is make trx
-            hash_trx: str
-                trx hash for put it in block
-            is_generic: bool
-                is it a base coin or not? the base coin is the first coin
-                is made by miners for its mining reward
-            include_block: str
-                in which block is this trx was mined? it is a hex hash of a block
-                in blockchain which was mined transaction in
-            sender_key: str
-                Public key who make this transaction
+    Attribute
+    ---------
+        hash_trx: str
+            Trx string of this block (in hex).
+        is_generic: bool
+            Determines it a base trx. The base trx is the first trx is made by miners
+            for their mining rewards.
+        include_block: str
+            In which block has been mined this transaction? It is a hex of block hash in
+            the blockchain in which was mined transaction.
+        sender_key: str
+            Sender addresses who made this transaction.
+        inputs: List[Coin]
+            List of coins that the sender provides for recipients. They are unspent coins.
+            (to have not spent before yet)
+        outputs: List[Coin]:
+            The list of coins which their owner could use for sending to others.
+        values: int
+            The amount of coins which have been sent.
+        time: float
+            Time which trx is made
     """
 
     def __init__(
         self,
         include_block_: int,
         sender_key: str,
-        inputs_: Optional[List[Coin]] = None,
-        outputs_: Optional[List[Coin]] = None,
-        time_: Optional[float] = None,
+        inputs: Optional[List[Coin]] = None,
+        outputs: Optional[List[Coin]] = None,
+        time: Optional[float] = None,
     ) -> None:
-        self.time = datetime.utcnow().timestamp() if not time_ else time_
-        if inputs_ is None and outputs_ is None:
+        """initializes object attribute based on being necessary"""
+        self.time = datetime.utcnow().timestamp() if not time else time
+        if inputs is None and outputs is None:
             self.senders = []
             self.recipients = [sender_key]
             self.value = SUBSIDY
@@ -172,14 +200,14 @@ class Trx:
             self.inputs = []
             self.is_generic = True
         else:
-            self.senders = [in_coin.owner for in_coin in inputs_]
-            self.recipients = [out_coin.owner for out_coin in outputs_]
-            self.value = sum(coin.value for coin in outputs_)
+            self.senders = [in_coin.owner for in_coin in inputs]
+            self.recipients = [out_coin.owner for out_coin in outputs]
+            self.value = sum(coin.value for coin in outputs)
             self.hash_trx = self.calculate_hash()
-            self.inputs = inputs_  # TODO: check input not to be empty
-            for out_coin in outputs_:
+            self.inputs = inputs  # TODO: check input not to be empty
+            for out_coin in outputs:
                 out_coin.created_trx_hash = self.hash_trx
-            self.outputs = outputs_
+            self.outputs = outputs
             self.is_generic = False
         self.public_key = sender_key  # TODO: should be lists
         self.include_block = include_block_
@@ -192,22 +220,23 @@ class Trx:
         value: float
     ) -> Trx:
         """
-        create a transaction from sender coins
+        Just creates a transaction object from owner coins.
 
         Args
         ----
         owner_coins: List[Coin]
-            a List of sender's coin
+            A List of coins that a person owns he wants to send.
         sender_key: str
-            public key of sender
+            The public key address of owner the coins and the sender.
         recipient_key: str
-            the public key of who want sends to
+            The Public key address of who wants to receive the coins.
         value:
-            amount of send
+            The amount of coins which want to send.
 
         Returns
         -------
-            return a object of Trx class
+        Trx
+            A Trx object that creates from inputs and outputs coins.
         """
         # TODO: change sender key to List of sender key
         remain = value
@@ -231,7 +260,7 @@ class Trx:
         return trx
 
     def set_hash_coins(self):
-        """set the output coins of trx to hash of this trx"""
+        """Sets the output coins of trx to hash of this trx"""
         for i, in_coin in enumerate(self.inputs):
             in_coin.spend(self.hash_trx, i)
         for i, out_coin in enumerate(self.outputs):
@@ -239,7 +268,9 @@ class Trx:
             out_coin.out_index = i
 
     def calculate_hash(self) -> str:
-        """calculate this trx hash and return hex hash"""
+        """calculate this trx hash sha256 and set the `self.hash_trx`
+        then return hex of that.
+        """
         cal_hash = sha256(
             (f"{self.senders}{self.recipients}{self.value}{self.time}").encode()
         ).hexdigest()
@@ -247,25 +278,22 @@ class Trx:
         return cal_hash
 
     def get_data(self, with_hash=False, is_POSIX_timestamp=True) -> Dict[str, Any]:
-        """
-        get transaction data that has:
-            - inputs: the input coins
-            - output: the output coins
-            - value: amount of coins are sended
-            - time: the time is create this trx
-            - include_block: this trx is in which block in blockchain
-            - hash: if with_hash is True, then put trx hash too
+        """Returns a dictionary from coin data.
 
-        Args
+        Parameters
         ----
-            with_hash: bool = False
-                if True put trx hash too
-            is_POSIX_timestamp: bool = True
-                if not True then put hummable time
+        with_hash: bool = False
+            Determines puts trx hash or not.
+        is_POSIX_timestamp: bool = True
+            Determines puts hummable time or not.
 
         Returns
         -------
             return a dict[str, Any] contains trx data
+
+        See Also
+        --------
+        `class Trx` docs
         """
         inputs = [in_coin.get_data() for in_coin in self.inputs] if not self.is_generic else []
         outputs = [out_coin.get_data() for out_coin in self.outputs]
@@ -280,7 +308,8 @@ class Trx:
             data['hash'] = self.__hash__
         return data
 
-    def check(self, unspent_coins) -> bool:
+    def check(self, unspent_coins: Dict[str, Any]) -> bool:
+        """Checks this transaction is valid or not"""
         for index, coin in enumerate(self.inputs):
             # is input coin trx valid
             if coin is not None and not coin.check_input_coin(unspent_coins):
@@ -306,4 +335,4 @@ class Trx:
         return f'{str(self.inputs)}{str(self.outputs)}{self.time}'
 
     def __repr__(self) -> str:
-        return f'({str(self.inputs)}->{str(self.outputs)} on {datetime.fromtimestamp(self.time)})'
+        return f'({self.value} coins from {self.senders} to {self.recipients} on {datetime.fromtimestamp(self.time)})'

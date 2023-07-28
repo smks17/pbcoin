@@ -10,7 +10,7 @@ class CliErrorCode(IntFlag):
     NOT_FOUND = auto()  # not found your request query
     TRX_PROBLEM = auto()  # problem in making or sending transactions
     MINING_ON = auto()  # mining is already working
-    MINING_OFF = auto()  # mining has already been stoped
+    MINING_OFF = auto()  # mining has already been stopped
 
     def message(self):
         """get the message for this code"""
@@ -24,7 +24,7 @@ class CliErrorCode(IntFlag):
         elif self & CliErrorCode.MINING_ON:
             return "ERROR: Mining was already working"
         elif self & CliErrorCode.MINING_OFF:
-            return "ERROR: Mining has already been stoped"
+            return "ERROR: Mining has already been stopped"
         else:
             return f"ERROR: {self}"
 

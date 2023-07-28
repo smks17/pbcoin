@@ -24,10 +24,14 @@ class ProcessingHandler:
 
     Attributes
     ----------
-        - blockchain
-        - unspent_coins
-        - wallet
-        - mempool
+    blockchain: Blockchain
+        A Blockchain object
+    unspent_coins: Dict[str, Coin]
+        List of unspent coins
+    wallet: Wallet
+        A Wallet object
+    mempool: Mempool
+        A Mempool object to add transactions
     """
     def __init__(self,
                  blockchain: BlockChain,
@@ -36,11 +40,29 @@ class ProcessingHandler:
                  mempool: Mempool):
         self.blockchain = blockchain
         self.unspent_coins = unspent_coins
-        self.wallet = wallet
+        self.wallet = wallet  # TODO: use public key (address)
         self.mempool = mempool
 
-    async def handle(self, *args) -> bool:
-        message = args[0]
+    async def handle(self, *args) -> None:
+        """(async) Handles the request that a node was sended.
+        
+        Parameters
+        ----------
+        message: Message
+            A Message object that contains received data.
+        peer: Peer
+            A Peer object that contains information about the sender.
+        node: Node
+            A node object that will be used for interacting other nodes.
+
+        Return
+        ------
+        Nothing
+
+        NOTE:: All other methods of this class have the same parameters and return item.
+        And also they are async function too.
+        """
+        message: Message = args[0]
         # TODO: Check the structure of message data is correct or not
         if not message.status:
             self.handle_error()
@@ -78,7 +100,21 @@ class ProcessingHandler:
         await node.write(peer.writer, response.create_message(node.addr), message.addr)
 
     async def handle_request_new_node(self, message: Message, peer: Peer, node: Node):
-        """handle a new node for add to the network by finding new neighbors for it"""
+        """(async) Handles a new node just upped for addition to the network to try
+        finding new neighbors for it.
+
+        - It first checks itself to have a place to adds itself neighbors. If it is then,
+        add itself to `to_request_other` list that contains nodes which the new node will
+        request for adding to its neighbors list.
+
+        - Next, if the new node still has a place for a neighbor, it will send a request to
+        its neighbors for finding recursively new nodes to do the same.
+
+        - If still didn't find any neighbors for it, it will delete a node from its
+        neighbors and now there will be 2 new places (nodes) to be a new neighbors.
+
+        - At the end, sends the result.
+        """
         n_connections = int(message.data["n_connections"])
         message.data["passed_nodes"].append(node.addr.hostname)
         to_request_other = Message(
@@ -157,6 +193,12 @@ class ProcessingHandler:
                          message.addr)
 
     async def handle_delete_neighbor(self, message: Message, peer: Peer, node: Node):
+        """(async) Handles requests to end with being themself neighbors.
+        
+        See Also
+        --------
+        `handle_request_new_node()`
+        """
         # TODO: send the result with nonblock
         response = Message(status=True,
                            type_=ConnectionCode.NOT_NEIGHBOR,
@@ -170,12 +212,29 @@ class ProcessingHandler:
             logging.info(f"delete neighbor for {node.addr.hostname}: {message.addr.hostname}")
             response = Message(True, ConnectionCode.OK_MESSAGE, addr)
         else:
-            # TODO: make a error message
             response = Message(False, 0, addr)
         await node.write(peer.writer, response.create_message(node.addr), message.addr)
 
     async def handle_mined_block(self, message: Message, peer: Peer, node: Node):
-        """handle for request finder new block"""
+        """(async) Handles to request finder a new block.
+        
+        First the block will been checked:
+        - If the new block is just the next of the last block of the self blockchain and
+        it is valid, then it will be added to the self blockchain.
+
+        - Else if the new block is just the next of the last block of self blockchain but
+        it is not valid, it will send an error to the sender and not add to self
+        blockchain.
+
+        - If the new block is too further from the last block of the self blockchain and
+        there is a gap between the new block and the self last block, it will get the gap
+        blocks and resolve it with the self-blockchain. If there is any problem in the
+        sent blocks, it will send an error to the sender and not add to the self
+        blockchain.
+
+        - Otherwise, if self blockchain is further than the new block, then it will tell
+        the sender to get the new blocks and resolve its blockchain.
+        """
         block_data = message.data
         logging.debug(f"Mine block from {message.addr.hostname}: {block_data} to check")
         block = Block.from_json_data_full(block_data['block'])
@@ -235,6 +294,7 @@ class ProcessingHandler:
             await node.write(peer.writer, request.create_message(node.addr))
 
     async def handle_resolve_blockchain(self, message: Message, peer: Peer, node: Node):
+        """(async) Handles request to resolve self blockchain with new blocks."""
         blocks = message.data['blocks']
         blocks = [Block.from_json_data_full(block) for block in blocks]
         result, index_block, validation = self.blockchain.resolve(blocks, self.unspent_coins)
@@ -245,7 +305,9 @@ class ProcessingHandler:
             await node.write(peer.writer, ok_msg.create_message(node.addr))
 
     async def handle_get_blocks(self, message: Message, peer: Peer, node: Node):
-        """handle for request another node for getting block"""
+        """(async) Handles for requesting another node for getting blocks from the first
+        index or first block hash until the last block.
+        """
         copy_blockchain = copy(self.blockchain)
         first_index: Optional[int] = None
         hash_block = message.data.get('hash_block', None)
@@ -265,11 +327,17 @@ class ProcessingHandler:
         else:
             blocks = copy_blockchain.get_data(first_index)
             request = Message(True,
-                              ConnectionCode.SEND_BLOCKS,
+                              ConnectionCode.SEND_BLOCKS,  # TODO: Delete SEND_BLOCKS code
                               message.addr).create_data(blocks=blocks)
         await node.write(peer.writer, request.create_message(node.addr), False)
 
     async def handle_new_trx(self, message: Message, peer: Peer, node: Node):
+        """(async) Handles to request maker a new transaction.
+
+        Gets the data from the message and builds Trx object from it. After that check
+        the validation of the transaction. If the transaction is valid, it will be added
+        to the mempool to mine. Otherwise, will be sent an error message to the sender.
+        """
         message.data['passed_nodes'].append(node.addr.hostname)
         public_key = message.data['public_key']
         sig = tuple_from_string(message.data['signature'], from_b64=True)
@@ -315,6 +383,7 @@ class ProcessingHandler:
             await node.write(peer.writer, error.create_message(node.addr), True)
 
     async def handle_ping(self, message: Message, peer: Peer, node: Node):
+        """(async) Handles a ping message to check the connection. Just Pong it!"""
         response = message.copy()
         try:
             await node.write(peer.writer, response.create_message(node.addr), message.addr)

@@ -22,22 +22,24 @@ logging = getLogger(__name__)
 
 
 class CliServer():
-    def __init__(self, socket_path_) -> None:
-        """
-        socket_path_ for unix os is a path to unix socket like: './node_socket.s'
+    """The class runs a local server to interact with the Cli application. All object
+    that it needs gets from `core.py`"""
+    def __init__(self, socket_path) -> None:
+        """socket_path for unix os is a path to unix socket like: './node_socket.s'
         but for windows os is a path to pipe socket like: '//./pipe/node_socket'
         """
+        # TODO: get objects that it needs.
         try:
             self.is_unix = socket.AF_UNIX is not None
-            self.socket_path = socket_path_
+            self.socket_path = socket_path
         except:
             self.is_unix = False
-            self.pipe_path = socket_path_
+            self.pipe_path = socket_path
 
     async def handle_cli_command_unix(self,
                                       reader: asyncio.StreamReader,
                                       writer: asyncio.StreamWriter):
-        """handle the user input cli from receive data UNIX socket"""
+        """(async) Handles the cli user input from receive data UNIX socket"""
         recv = await reader.readuntil(b'\n')
         recv = recv.decode()
         # TODO: better receive (make a buffer class)
@@ -51,7 +53,7 @@ class CliServer():
         writer.close()
 
     async def handle_cli_command_win(self, pipe):
-        """handle the user input cli from receive data Windows pipe socket"""
+        """Handles the cli user input from receive data Windows pipe socket"""
         # TODO: better receive (make a buffer class)
         buffer_size = 2048
         buffer = ""
@@ -69,6 +71,9 @@ class CliServer():
         win32file.WriteFile(pipe, f'{result}\n{errors.value}\n'.encode())
 
     async def start(self):
+        """(async) Start server loop and callback `handle_cli_command_win` or
+        `handle_cli_command_unix`
+        """
         # using AF_UNIX for cli api
         if self.is_unix:
             if os.path.exists(self.socket_path):
@@ -110,7 +115,7 @@ class CliServer():
             raise NotImplementedError("Your os doesn't recognize for cli api")
 
     async def parse_args(self, command: int, args: List[str]) -> Tuple[str, CliErrorCode]:
-        """parse the argument base on command input from user and do the command"""
+        """(async) Parses the argument base on input command and its args and do the command"""
         result = ""
         errors = CliErrorCode.NOTHING
         if command == CliCommandCode.TRX:

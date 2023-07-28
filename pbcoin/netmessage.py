@@ -19,7 +19,8 @@ class ConnectionCode(IntEnum):
     NOT_NEIGHBOR = auto()  # not be neighbors anymore!
     MINED_BLOCK = auto()  # declare other nodes find a new block
     RESOLVE_BLOCKCHAIN = auto()  # for resolving blockchain of 2 nodes
-    GET_BLOCKS = auto()  # request for get some blocks
+    GET_BLOCKS = auto()  # request for getting some blocks
+    # TODO: remove SEND_BLOCKS 
     SEND_BLOCKS = auto()  # responds to GET_BLOCKS
     ADD_TRX = auto()  # new trx for add to mempool
     PING_PONG = auto()  # For pinging other nodes and check connection
@@ -34,6 +35,19 @@ class Errno(IntEnum):
 
 
 class Message:
+    """A Message class that contains network message data and information
+    
+    Attributes
+    ----------
+    status: bool
+        Determines this message is an OK message or a fail message.
+    type_: Union[ConnectionCode, Errno]
+        This message sends for what things.
+    addr: Addr
+        The sender's ip and port
+    data: Dict[str, Any]
+        The extra(actual) data that this type_ of message needs
+    """
     status: bool
     type_: Union[ConnectionCode, Errno]
     addr: Addr
@@ -44,13 +58,19 @@ class Message:
                  type_: Union[ConnectionCode, Errno],
                  addr: Addr,
                  data: Optional[Dict[str, Any]] = None):
+        """Initialize object attribute
+        
+        See Also
+        --------
+        `Message` docs
+        """
         self.status = status
         self.type_ = type_
         self.addr = addr
         self.data = data
 
-    def create_message(self, my_addr: Addr):
-        """gather info and convert it to bytes array"""
+    def create_message(self, my_addr: Addr) -> bytes:
+        """Gathers info and makes a JSON object and converts it to a bytes array"""
         base_data = {
             "status": self.status,
             "type": self.type_,
@@ -63,6 +83,7 @@ class Message:
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> Message:
+        """Parse the message from a dict/JSON message"""
         copy_data = deepcopy(data)
         src_addr = Addr.from_hostname(copy_data["src_addr"])
         src_addr.pub_key = copy_data["pub_key"]
@@ -82,7 +103,7 @@ class Message:
         return Message.from_dict(json.loads(data))
 
     def create_data(self, **kwargs):
-        """set and check extra data that is diffrent for every code message"""
+        """Sets and checks extra data that is different for every code message"""
         try:
             if not self.status:
                 if self.type_ == Errno.BAD_MESSAGE:
@@ -145,4 +166,5 @@ class Message:
         return self
 
     def copy(self) -> Message:
+        """Copies the message and returns that"""
         return deepcopy(self)

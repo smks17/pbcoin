@@ -42,36 +42,42 @@ class BlockValidationLevel(Flag):
 
 class Block:
     """
-    Block contains transactions and nodes find a hash of them
-    that is less than difficulty
+    The block contains transactions to find a nonce which the block hash should be less
+    than difficulty to solve proof-of-work.
 
     Attributes
     ----------
-        trx_list: list[Trx]
-            list of all trx in block
-        previous_hash: str
-            hash of previous block in blockchain
-        nonce: int
+        - Block Header
 
+        previous_hash: str
+            Hash of previous block in blockchain.
+        nonce: int
+            The number that is added to block hash to be less than difficulty.
         block_hash: str
-            hash string this block (in hex)
+            Hash string of this block (in hex).
         time: float
-            time that this block mined in POSIX timestamp format
+            Time that this block mined in POSIX timestamp format.
         is_mined: bool = False
-            if it is True, it means block is mined
+            If it is True, it means block is mined.
         block_height: int
-            how many block is before that block in blockchain
+            Determines this block is the nth block that has been mined.
         trx_hashes: list[str]
-            list of all trx hash (using for header block)
+            List of all trx hash
         merkle_tree: MerkleTree = None
-            a object of MerkleTree class of root
+            A object of MerkleTree class of root from list of trx hashes.
+
+        - Addition in Full Block
+
+        trx_list: list[Trx]
+            List of all trx in the block.
     """
 
-    def __init__(self, preHash: str, block_height: int, subsidy: Optional[Trx] = None):
-        self.previous_hash = preHash
+    def __init__(self, previous_hash: str, block_height: int, subsidy: Optional[Trx] = None):
+        """initialize previous_hash, block_height and subsidy(optional)"""
+        self.previous_hash = previous_hash
         self.block_height = block_height
         self.nonce = 0
-        self.time = datetime.utcnow().timestamp()
+        self.time = datetime.utcnow().timestamp()  # TODO: get from args
         # make subsidy trx (a trx that give itself reward for mine block)
         if subsidy is not None:
             self.transactions = [subsidy]
@@ -82,32 +88,42 @@ class Block:
             self.merkle_tree = None
             self.has_subsidy = False
 
-    def add_trx(self, trx_: Trx) -> None:
-        """ add new trx without checking to block """
-        self.transactions.append(trx_)
+    def add_trx(self, trx: Trx) -> None:
+        """Adds new trx without checking it. Also sets the trx hashes coin object."""
+        self.transactions.append(trx)
         # TODO: implement add function in merkle tree
+        # recalculate merkle tree root hash and trx hash
         self.build_merkle_tree()
         self.calculate_hash()
-        for i, coin in enumerate(trx_.inputs):
-            coin.spend(trx_.__hash__, i)
-        for i, coin in enumerate(trx_.outputs):
-            coin.created_trx_hash = trx_.__hash__
+        # Sets input to spent coin
+        for i, coin in enumerate(trx.inputs):
+            coin.spend(trx.__hash__, i)
+        # Set created_trx_hash of output coins.
+        for i, coin in enumerate(trx.outputs):
+            coin.created_trx_hash = trx.__hash__
             coin.out_index = i
 
     def get_list_hashes_trx(self) -> list[str]:
+        """Gets the list of all transactions hash"""
         return [trx.__hash__ for trx in self.transactions]
 
     def build_merkle_tree(self) -> None:
-        """ set and build merkle tree from trxs of block"""
+        """Sets and builds merkle tree from list of block trx"""
         self.merkle_tree = MerkleTreeNode.build_merkle_tree(
             self.get_list_hashes_trx())
 
     def set_mined(self) -> None:
+        """Sets this block has been mined and sets block time now"""
         self.time = datetime.utcnow().timestamp()
         self.is_mined = True
 
     def check_trx(self, unspent_coins: dict[str, Coin]) -> bool:
-        """checking the all block trx"""
+        """Checks the all block transactions. 
+        
+        See Also
+        -------
+        `trx.check()`
+        """
         # TODO: return validation
         for trx in self.transactions:
             if not trx.check(unspent_coins):
@@ -136,6 +152,8 @@ class Block:
                 unspent_coins[trx_hash] = deepcopy(out_coins)
 
     def revert_outputs(self, unspent_coins: dict[str, Coin]):
+        """Gets the unspent coins and reverse it inplace by this block transaction"""
+        # TODO: Relocated this method. here is a bad place for it.
         for trx in self.transactions:
             in_coins = trx.inputs
             out_coins = trx.outputs
@@ -151,7 +169,8 @@ class Block:
                     # delete output coin from unspent_coins coins
                     unspent_coins.pop(coin.created_trx_hash)
 
-    def set_nonce(self, nonce_: int): self.nonce = nonce_
+    def set_nonce(self, nonce: int):
+        self.nonce = nonce
 
     def calculate_hash(self) -> str:
         if self.merkle_tree is None:
@@ -163,63 +182,79 @@ class Block:
 
     def is_valid_block(
         self,
-        unspent_coins: Dict[str, Coin],
-        pre_hash = "",
-        difficulty = None  # almost for unittest
+        unspent_coins: Dict[str, Coin] = None,
+        pre_hash: str = "",
+        difficulty: Optional[int] = None  # almost for unittest
     ) -> BlockValidationLevel:
-        """checking validation and return validation level"""
+        """Checks validation and return validation level
+
+        Parameters
+        ---------
+        unspent_coins: Optional[Dict[str, Coin]] = None
+            The coins that have not been spent yet. It's used to check the validation
+            block (transactions).
+        pre_hash: str = ""
+            The  hash of previous block that is before this block in blockchain.
+        difficulty: Optional[int] = None
+            The block difficulty that should be.
+            If it's passed None, it gets that from configs.
+
+        Return
+        ------
+        BlockValidationLevel
+            Determine that block passed which fields.
+        """
         if difficulty is None:
             difficulty = conf.settings.glob.difficulty
         valid = BlockValidationLevel.Bad
-
         # difficulty level
         if int(self.__hash__, 16) <= difficulty:
             valid = valid | BlockValidationLevel.DIFFICULTY
-
         # check all trx
         if self.check_trx(unspent_coins):
             valid = valid | BlockValidationLevel.TRX
-
         # check previous hash
         if self.previous_hash == pre_hash:
             valid = valid | BlockValidationLevel.PREVIOUS_HASH
-
         return valid
 
     def search(self, key_hash) -> Optional[int]:
-        """search from last block to first for find block with key_hash"""
+        """Searches from last block to first for finding the block which
+        its hash is key_hash
+        """
         for i in range(len(self.blocks)-1, -1, -1):
             if self.blocks[i].__hash__ == key_hash:
                 return i
         return None
 
     def get_data(self, is_full_block=True, is_POSIX_timestamp=True) -> dict[str, Any]:
-        """
-            get data of block that has:
-                header:
-                - hash: block hash
-                - height: block height (number of blocks before this block)
-                - nonce:
-                - number trx: number of transactions in this block
-                - merkle_root: merkle tree root hash of transactions
-                - trx_hashes: list of transactions hash
-                - previous_hash
-                - time: the time is mined
+        """gets data of this block that has:
 
-                other:
-                - trx: list of all block transactions
-                - size: size of data (block)
-            
-            argument
-            --------
-                - fis_ull_block: bool = True
-                    if it is False, return just header block data
-                - is_POSIX_timestamp: bool = True:
-                    if it is False, return data with humanely time represent
-            return
+            header:
+            - hash: str
+            - height: int
+            - nonce: int
+            - number_trx: int
+            - merkle_root: str
+            - trx_hashes: List[str]
+            - previous_hash: str
+            - time: int | str
+
+            other:
+            - trx: List[Dict[str, any]]
+            - size: int
+
+            Parameters
+            ----------
+            is_full_block: bool = True
+                If it is False, then return just the header block data.
+            is_POSIX_timestamp: bool = True:
+                If it is False, then return data with humanely readable time represent.
+
+            Return
             ------
                 dict[str, any]
-                    return block data
+                    return the block data
         """
         block_header = {
             "hash": self.__hash__,
@@ -247,7 +282,14 @@ class Block:
         return data
 
     @staticmethod
-    def from_json_data_header(data: dict['str', any], is_POSIX_timestamp=True) -> Block:
+    def from_json_data_header(data: dict[str, Any], is_POSIX_timestamp=True) -> Block:
+        """gets a block data header like `get_block` function and then
+        make a Block object from that.
+
+        See Also
+        --------
+        `Block.get_date()`: The function create data like inputs.
+        """
         new_block = Block(data['previous_hash'], data['height'])
         new_block.block_hash = data['hash']
         new_block.nonce = data['nonce']
@@ -261,12 +303,20 @@ class Block:
 
     @staticmethod
     def from_json_data_full(data: dict['str', any], is_POSIX_timestamp=True) -> Block:
+        """gets a block full data like `get_block` function and then
+        make a Block object from that.
+
+        See Also
+        --------
+        `Block.get_date()`: The function create data like inputs.
+        """
         new_block = Block.from_json_data_header(data['header'], is_POSIX_timestamp)
         trx = data['trx']
         trxList_ = []
         for each_trx in trx:
             inputs = []
             for coin_idx, in_coin in enumerate(each_trx['inputs']):
+                # TODO: It should be in Coin class
                 inputs.append(
                     Coin(in_coin['owner'],
                          in_coin['in_index'],

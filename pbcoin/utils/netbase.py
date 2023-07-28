@@ -1,3 +1,4 @@
+"""The net base module to use for network in pbcoin"""
 from __future__ import annotations
 
 import asyncio
@@ -23,20 +24,37 @@ AsyncReader = NewType("AsyncReader", asyncio.StreamReader)
 
 @dataclass
 class Addr:
+    """Basic structure network address
+    
+    Attributes
+    ----------
+    ip: str
+        A ip version 4
+    port: int
+
+    pub_key: Optional[str]
+        Its address key
+    """
     ip: str
     port: int
     pub_key: Optional[str] = None
 
     @staticmethod
     def from_hostname(hostname: str, pub_key=None):
+        """Creates Addr object from a hostname str. (eg "127.0.0.1:8989")"""
         ip, port = hostname.split(":")
         return Addr(ip=ip, port=int(port), pub_key=pub_key)
 
     @property
-    def hostname(self): return f"{self.ip}:{self.port}"
+    def hostname(self) -> str:
+        """A string hostname of ip and port in shape "<ip>:<port>".
+        (eg "127.0.0.1:8989")
+        """
+        return f"{self.ip}:{self.port}"
 
     @staticmethod
     def convert_to_addr_list(addr_list: List[str]):
+        """A helper function to convert a list of hostname to list of Addr object"""
         return list(map(Addr.from_hostname, addr_list))
 
     def __str__(self) -> str:
@@ -52,7 +70,13 @@ class Addr:
 
 
 class Connection:
-    """The base class that is used for connecting other peer or nodes"""
+    """The base network class that is used for connecting other peer or nodes.
+
+    Attributes
+    ----------
+    addr: Addr
+        The itself network address for connection and listening.
+    """
     def __init__(self, addr: Addr, timeout: Optional[float] = None):
         self.addr = addr
         if not self.addr:
@@ -61,8 +85,19 @@ class Connection:
                              pub_key=None)
         self.timeout = timeout
 
-    async def connect_to(self, dst_addr: Addr) -> Peer:
-        """make a connection to destination dst_addr and return peer as Peer object"""
+    async def connect_to(self, dst_addr: Addr) -> Optional[Peer]:
+        """(async) Makes a connection to destination address.
+        
+        Parameters
+        ----------
+        dst_addr: Addr
+            The destination address that wants to be connected to.
+        Return
+        ------
+        Optional[Peer]
+            A Peer object with connection. If making connection is not successfully 
+            returns None.
+        """
         try:
             # TODO: add timeout
             reader, writer = await asyncio.open_connection(dst_addr.ip, dst_addr.port)
@@ -85,8 +120,24 @@ class Connection:
                                dst_addr: Addr,
                                data: str,
                                wait_for_receive=True) -> Optional[bytes]:
-        """make a connection to destination addr and send data then if wait_for_receive
-        is True wait to recieve data from destination and return data"""
+        """(async) Makes a connection to the destination address and sends data. Then if
+        it is necessary wait to receive data from that and return the data
+
+        Parameters
+        ----------
+        dst_addr: Addr
+            The destination address that wants to be connected to.
+        data: str
+            The data that wants to be sended to destination.
+        wait_for_receive: bool = True
+            Determines wait to receives and reads data from destination or not.
+
+        Returns
+        -------
+        Optional[bytes]
+            If wait_for_receive is True, then return the data received.
+            Otherwise return nothing
+        """
         rec_data = b''
         # try to connect
         peer = await self.connect_to(dst_addr)
@@ -103,7 +154,6 @@ class Connection:
                 return None
             logging.debug(
                 f'receive data from {dst_addr.hostname} {rec_data.decode()}')
-            # await self.disconnected_from(f"{src_addr.hostname}")
         return rec_data
 
     async def write(self,
@@ -111,8 +161,25 @@ class Connection:
                     data: Union[str, bytes],
                     addr: Optional[Addr] = None,
                     flush: bool = True) -> Optional[Exception]:
-        """write data from writer to destination and if successfully return None
-        otherwise return Error
+        """(async) Writes the data from writer stream to the destination.
+
+        Parameters
+        ----------
+        writer: AsyncWriter
+            A stream writer for writing in it and sending data to the destination.
+        data: Union[str, bytes]
+            The data that wants to be sent to the destination.
+        addr: Optional[Addr] = None
+            The destination address to which the data wants to be sent.
+        flush: bool = True
+            Determines to wait to flush the write buffer stream.
+
+        Returns
+        -------
+        Optional[Exception]
+            If it will be successful then return None, otherwise return Error.
+
+        TODO:: returns Exception(Error) is a bad idea. should be replaced ASA.
         """
         if writer is None:
             return Exception("Pass a non writable handler")
@@ -136,8 +203,20 @@ class Connection:
         return None
 
     async def read(self, reader: AsyncReader, addr: Optional[Addr] = None) -> Optional[bytes]:
-        """read data from reader if successfully return the data in bytes type
-        otherwise return empty bytes
+        """(async) Writes the data from writer stream from the destination.
+
+        Parameters
+        ----------
+        reader: AsyncReader
+            A stream reader for reading from it and receiving data from the destination.
+        addr: Optional[Addr] = None
+            The destination address from which the data wants to be received.
+
+        Returns
+        -------
+        Optional[bytes]
+            If it will be successful then return the received data in bytes type,
+            otherwise return empty bytes.
         """
         if reader is None:
             return None
@@ -153,15 +232,6 @@ class Connection:
                 logging.error("Could not read message", exc_info=True)
             return data
         return data
-
-    async def reset(self, close=True):
-        """delete its neighbors and close the listening too"""
-        self.neighbors = dict()
-        if close:
-            self.close()
-        for task in self.tasks:
-            await task.close()
-        self.tasks = []
 
 
 @dataclass
