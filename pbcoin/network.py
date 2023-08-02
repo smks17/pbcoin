@@ -49,7 +49,6 @@ class Node(Connection):
                  proc_handler: ProcessingHandler,
                  timeout: Optional[float] = None):
         super().__init__(addr, timeout)
-        self.is_listening = False
         self.neighbors: Dict[str, Tuple[str, int]] = dict()
         self.tasks = []  # save all tasks that process message
         # TODO: use kinda combination of OrderedSet & Queue to store last message and
@@ -95,28 +94,38 @@ class Node(Connection):
             task = asyncio.create_task(self.proc_handler.handle(message, peer, self))
             await task
 
-    async def listen(self):
-        """(async) Start listening requests from other nodes and callback
-        `self.handle_peer`
+    async def create_a_server(self, loop: Optional[asyncio.AbstractEventLoop]=None):
+        """(async) It just creates a server with callback `self.handle_peer`. It gets the
+        IP and Port of the server from `self.addr` and it will be run in a specific loop
+        if it's passed. If the process is going on not successfully, it will be raised.
         """
         try:
             ip_host = self.addr.ip
             port_host = self.addr.port
-            self.server = await asyncio.start_server(
-                self.handle_peer, host=ip_host, port=port_host)
+            self.server = await asyncio.start_server(self.handle_peer,
+                                                     host=ip_host,
+                                                     port=port_host,
+                                                     loop=loop)
         except Exception as e:
             logging.fatal("Could not start up server connection", exc_info=True)
             raise e
-        logging.info(
-            f"node connection is serve on {self.server.sockets[0].getsockname()}")
+        else:
+            logging.debug(
+                f"Node server is created on {self.server.sockets[0].getsockname()}")
+
+    async def listen(self):
+        """(async) Start listening requests from other nodes and callback
+        `self.handle_peer`. If the process is going on not successfully, it will be raised.
+        """
+        if not hasattr(self, "server") or self.server is None:
+            await self.create_a_server()
         async with self.server:
             try:
-                self.is_listening = True
+                logging.info(f"Node server is listening to requests!")
                 await self.server.serve_forever()
             except Exception:
                 logging.fatal("Serving is broken", exc_info=True)
-            finally:
-                self.is_listening = False
+                raise
 
     def add_neighbor(self, new_addr: Addr):
         """Just adds new_addr to its neighbors if possible"""
@@ -163,12 +172,10 @@ class Node(Connection):
 
     def close(self):
         """close listening and close all handler tasks"""
-        if self.is_listening:
-            try:
-                self.server.close()
-                self.is_listening = False
-            except asyncio.CancelledError:
-                pass
+        try:
+            self.server.close()
+        except asyncio.CancelledError:
+            pass
 
     async def start_up(self, seeds: List[str], get_blockchain = True) -> None:
         """(async) Begins to find new neighbors and connect to the blockchain network.
@@ -409,3 +416,9 @@ class Node(Connection):
         except Exception:
             return False
         return True
+
+    @property
+    def is_listening(self) -> bool:
+        if hasattr(self, "server") or self.server is not None:
+            return self.server.is_serving
+        return False

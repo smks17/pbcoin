@@ -45,9 +45,20 @@ class TestNetworkBase:
             proc_handler = ProcessingHandler(blockchain, unspent_coins, wallet, mempool)
             node = Node(addr, proc_handler, 1)
             self.nodes.append(node)
+        gathering = await asyncio.gather(*[
+            node.create_a_server()
+            for node in self.nodes
+        ], return_exceptions=True)
+        for f in gathering:
+            if isinstance(f, Exception):
+                raise f
+        self.__class__.loops = []
         self.__class__.tasks = []
         for node in self.nodes:
-            task = asyncio.create_task(node.listen())
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            task = loop.create_task(node.listen())
+            self.loops.append(loop)
             self.tasks.append(task)
             if not neighbor_finding or node.addr.ip == self.SENDER_IP:
                 continue
@@ -56,6 +67,8 @@ class TestNetworkBase:
         def close_nodes():
             for node in self.nodes:
                 node.close()
+            for loop in self.loops:
+                loop.close()
             for task in self.tasks:
                 task.cancel()
             self.tasks = []
@@ -93,6 +106,8 @@ class TestMakeConnection(TestNetworkBase):
         """run 2 nodes and check they connected or not"""
         sender = self.nodes[0]
         receiver = self.nodes[1]
+        assert sender.is_listening, "Sender is not listening"
+        assert receiver.is_listening, "Receiver is not listening"
         assert await sender.send_ping_to(receiver.addr), "Could not make connection!"
 
     @pytest.mark.parametrize(
@@ -107,10 +122,12 @@ class TestMakeConnection(TestNetworkBase):
         assert (not message_res.status) and (message_res.type_ == Errno.BAD_MESSAGE),  \
             "Other node hasn't understood that the message is wrong!"
 
-    #! TODO: Handling four neighbors unittest should be implemented with
-    #! the process or thread to run each node to avoid deadlock in async/await
+    # Note: Handling the four neighbors' unittest seems to be handled and is ok.
     @pytest.mark.parametrize(
-        "run_nodes", [(2, True)], ids = ["two nodes"], indirect = True
+        "run_nodes",
+        [(2, True), (4, True)],
+        ids=["two nodes", "four nodes"],
+        indirect=True
     )
     async def test_find_neighbors_more_total_connection_nodes(self,
                                                               run_nodes,
