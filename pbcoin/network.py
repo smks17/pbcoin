@@ -94,7 +94,7 @@ class Node(Connection):
             task = asyncio.create_task(self.proc_handler.handle(message, peer, self))
             await task
 
-    async def create_a_server(self, loop: Optional[asyncio.AbstractEventLoop]=None):
+    async def create_a_server(self):
         """(async) It just creates a server with callback `self.handle_peer`. It gets the
         IP and Port of the server from `self.addr` and it will be run in a specific loop
         if it's passed. If the process is going on not successfully, it will be raised.
@@ -104,8 +104,7 @@ class Node(Connection):
             port_host = self.addr.port
             self.server = await asyncio.start_server(self.handle_peer,
                                                      host=ip_host,
-                                                     port=port_host,
-                                                     loop=loop)
+                                                     port=port_host)
         except Exception as e:
             logging.fatal("Could not start up server connection", exc_info=True)
             raise e
