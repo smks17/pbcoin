@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import os.path as opt
 from random import randint
 from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
@@ -60,6 +61,9 @@ class Wallet:
         self.name = wallet_name
         output_path = opt.join(path_secret_key, wallet_name)
         if generate:
+            # TODO: Get key directory from setting and user
+            if not opt.exists(path_secret_key):
+                os.mkdir(opt.abspath(path_secret_key))
             self.gen_key(output_path)
         else:
             self.load_key(output_path)
