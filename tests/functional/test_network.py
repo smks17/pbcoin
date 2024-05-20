@@ -1,5 +1,4 @@
 import asyncio
-from copy import deepcopy
 import os
 
 import pytest

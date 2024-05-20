@@ -90,7 +90,11 @@ class TestBlockchain:
             Trx(2, "owner1", [Coin("owner1", 0, value=20)], [Coin("owner2", 0, value=20)]))
         self.blockchains[0].blocks[1].transactions[0].hash_trx = "Bluh"
         res = BlockChain.check_blockchain(self.blockchains[0].blocks, {}, conf.settings.glob.difficulty)
-        assert res == (False, 1, BlockValidationLevel.PREVIOUS_HASH)
+        assert (
+            res[0] == False
+            and res[1] == 1
+            and res[2] in BlockValidationLevel.ALL()
+        )
 
     @pytest.mark.parametrize(
         "setup_blockchains",

@@ -3,6 +3,7 @@ from datetime import datetime
 import pytest
 
 from pbcoin.block import Block, BlockValidationLevel
+import pbcoin.config as conf
 from pbcoin.trx import Trx, Coin
 
 
@@ -84,7 +85,7 @@ class TestBlock:
         last_block = self.test_blocks[-1]
         new_block = Block(last_block.previous_hash, len(self.test_blocks) + 1)
         pre_hash = self.test_blocks[-2].__hash__
-        validation = new_block.is_valid_block(self.unspent_coins, pre_hash=pre_hash)
+        validation = new_block.is_valid_block(self.unspent_coins, pre_hash=pre_hash, difficulty=conf.settings.glob.difficulty)
         all = BlockValidationLevel.ALL(except_validations=BlockValidationLevel.DIFFICULTY)
         assert validation == all
 
