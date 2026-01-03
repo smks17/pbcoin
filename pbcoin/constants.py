@@ -44,7 +44,7 @@ FULL_NODE: bool = False
 # Difficult level of hash block which should be less than
 #                       256 bit 1   left first 23 bit set 0
 #                     -----------------------------------
-DIFFICULTY: int = (2 ** 256 - 1) >> (16)
+DIFFICULTY: int = (2 ** 256 - 1) >> (21)
 
 # TODO: could be better it isn't constant
 # the amount of miner prize for mine a block
@@ -106,7 +106,7 @@ LOGGING_FORMAT: str = "%(asctime)s |  %(name)-18s |  %(levelname)-10s: %(message
 LOGGING_DATE_FORMAT: str = "%Y-%m-%d %H:%M-%S"
 
 # Change logging level if debug mode is True
-LOGGING_LEVEL: int = logging.INFO
+LOGGING_LEVEL: int = logging.DEBUG
 
 # File for write log
 LOGGING_FILENAME = BASE_PATH / "pbcoin.log"

@@ -15,12 +15,12 @@ import pbcoin.core as core
 from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.db import DB
 from pbcoin.mempool import Mempool
-from pbcoin.trx import Coin, Trx
+from pbcoin.trx import ALL_COINS_TYPE, Coin, Trx
 
 
 class BlockChain:
     """An in-memory blocks data"""
-    def __init__(self, blocks = [], full_node = True):
+    def __init__(self, blocks: List[Block] = [], full_node: bool = True):
         """
         Parameters
         ----------
@@ -52,9 +52,8 @@ class BlockChain:
     def add_new_block(
         self,
         block: Block,
-        unspent_coins: Optional[Dict[str, Coin]]=None,
+        unspent_coins: Optional[ALL_COINS_TYPE]=None,
         ignore_validation=False,
-        fetch_db: Optional[bool] = None,
         difficulty: Optional[int] = None,  # almost just for unittest
         db: Optional[DB] = None
     ) -> BlockValidationLevel:
@@ -90,8 +89,6 @@ class BlockChain:
         """
         if difficulty is None:
             difficulty = conf.settings.glob.difficulty
-        if fetch_db is None:
-            fetch_db = conf.settings.database.fetch
         if not ignore_validation:
             validation = block.is_valid_block(
                 unspent_coins, pre_hash=self.last_block_hash, difficulty=difficulty)
@@ -99,9 +96,9 @@ class BlockChain:
             validation = BlockValidationLevel.ALL()
         if validation == BlockValidationLevel.ALL():
             self.blocks.append(deepcopy(block))
-            if unspent_coins is not None:
+            if self.last_block and unspent_coins is not None:
                 self.last_block.update_outputs(unspent_coins)
-            if fetch_db:
+            if db:
                 self.fetch_db(db)
         # check that blockchain in memory is less than cache size
         if (not self.is_full_node) and (self.__sizeof__() >= self.cache):
@@ -111,7 +108,7 @@ class BlockChain:
     def resolve(
         self,
         new_blocks: List[Block],
-        unspent_coins: Dict[str, Coin],
+        unspent_coins: ALL_COINS_TYPE,
         difficulty: Optional[int] = None  # almost for unittest
     ) -> Tuple[bool, Optional[int], BlockValidationLevel]:
         """Resolves this blockchain with the new blocks.
@@ -120,7 +117,7 @@ class BlockChain:
         ----------
         new_blocks: List[Blocks]
             List of the new blocks to resolve and for adding to this blockchain
-        unspent_coins: Dict[str, Coin]
+        unspent_coins: Dict[str, List[Coin]]
             The coins that have not been spent yet for update after resolve.
         difficulty: Optional[int] = None
             The block difficulty that should be for checking block validation.
@@ -210,24 +207,21 @@ class BlockChain:
             return []
         return [block.__hash__ for block in self.blocks[first_index: last_index]]
 
-    def fetch_db(self, db: Optional[DB] = None):
+    def fetch_db(self, db: DB):
         """Fetching memory data with database
 
         This method checks just the height of the last block in memory and database and
         compares then the blocks add to/get from the database.
-        
+
         Parameters
         ----------
-        db: Optional[DB] = None
+        db: DB
             A connected object of `DB` class.
-            If it's passed None, it gets that from `core.py`.
 
         Return
         ------
         Nothing
         """
-        if db is None:
-            db = core.DATABASE
         block_header = db.get_last_block()
         db_height = 0
         if block_header is not None:
@@ -243,12 +237,12 @@ class BlockChain:
             for i in range(db_height - distance):
                 block_data = db.get_block(index=i)
                 block = Block.from_json_data_full(block_data)
-                self.add_new_block(block, fetch_db=False)
+                self.add_new_block(block)
 
     @staticmethod
     def check_blockchain(
         blocks: List[Block],
-        unspent_coins: Dict[str, Coin],
+        unspent_coins: ALL_COINS_TYPE,
         difficulty: Optional[int] = None  # almost just for unittest
     ) -> Tuple[bool, Optional[int], BlockValidationLevel]:
         """Check the validation of blocks.
@@ -257,7 +251,7 @@ class BlockChain:
         ----------
         blocks: List[Blocks]
             List of the blocks want to be checked.
-        unspent_coins: Dict[str, Coin]
+        unspent_coins: Dict[str, List[Coin]]
             The coins that have not been spent yet for checking blocks transactions.
         difficulty: Optional[int] = None
             The block difficulty that should be for checking block validation.
@@ -289,6 +283,12 @@ class BlockChain:
         """Gets a dictionary(json) of list of block data and return a Blockchain object"""
         blockchain = [Block.from_json_data_full(block) for block in blockchain_data]
         return BlockChain(blockchain)
+
+    def update_coins_outputs(self, all_output: ALL_COINS_TYPE):
+        # TODO: THIS IS NOT EFFICIENT WAY
+        for block in self.blocks:
+            block.update_outputs(all_output)
+
 
     @property
     def last_block(self) -> Optional[Block]:

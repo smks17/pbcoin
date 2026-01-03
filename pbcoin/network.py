@@ -20,13 +20,8 @@ from pbcoin.blockchain import BlockChain
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
 from pbcoin.logger import getLogger, log_error_message
 from pbcoin.netmessage import ConnectionCode, Errno, Message
-from pbcoin.utils.netbase import (
-    Addr,
-    AsyncReader,
-    AsyncWriter,
-    Connection,
-    Peer
-)
+from pbcoin.trx import ALL_COINS_TYPE
+from pbcoin.utils.netbase import Addr, Connection, Peer
 if TYPE_CHECKING:
     from pbcoin.block import Block
     from pbcoin.process_handler import ProcessingHandler
@@ -39,7 +34,7 @@ logging = getLogger(__name__)
 class Node(Connection):
     """The Node class for interaction with other nodes. This class inherits from
     the `Connection` class.
-    
+
     See Also
     --------
     `class Connection` docs in `netbase.py`.
@@ -49,13 +44,13 @@ class Node(Connection):
                  proc_handler: ProcessingHandler,
                  timeout: Optional[float] = None):
         super().__init__(addr, timeout)
-        self.neighbors: Dict[str, Tuple[str, int]] = dict()
+        self.neighbors: Dict[str, Addr] = dict()
         self.tasks = []  # save all tasks that process message
         # TODO: use kinda combination of OrderedSet & Queue to store last message and
         #       in process_handler doesn't use direct write or read
         self.proc_handler = proc_handler
 
-    async def handle_peer(self, reader: AsyncReader, writer: AsyncWriter):
+    async def handle_peer(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         """(async) This is a callback method that handles requests for data received
         from other nodes.
         """
@@ -78,8 +73,8 @@ class Node(Connection):
             error = Message(False, Errno.BAD_MESSAGE, peer.addr)
             await self.write(peer.writer, error.create_message(self.addr))
             return
-        except Exception:
-            logging.error("Something wrong in parsing message", exec_info=True)
+        except Exception as exc:
+            logging.error("Something wrong in parsing message", exc_info=exc)
             return
         logging.debug('receive data: ' + data)
         # set peer addr from that in message say
@@ -120,7 +115,7 @@ class Node(Connection):
             await self.create_a_server()
         async with self.server:
             try:
-                logging.info(f"Node server is listening to requests!")
+                logging.info("Node server is listening to requests!")
                 await self.server.serve_forever()
             except Exception:
                 logging.fatal("Serving is broken", exc_info=True)
@@ -129,21 +124,21 @@ class Node(Connection):
     def add_neighbor(self, new_addr: Addr):
         """Just adds new_addr to its neighbors if possible"""
         if not self.is_my_neighbor(new_addr):
-            self.neighbors[new_addr.pub_key] = new_addr
+            self.neighbors[new_addr.ip] = new_addr
         else:
             pass  # TODO: handle error
 
     def delete_neighbor(self, addr: Addr) -> bool:
         """Just deletes addr from its neighbors list if exists"""
         if self.is_my_neighbor(addr):
-            self.neighbors.pop(addr.pub_key)
+            self.neighbors.pop(addr.ip)
             return True
         else:
             return False
 
     def is_my_neighbor(self, addr: Addr) -> bool:
         """Check this addr is in its neighbors lists or not"""
-        return self.neighbors.get(addr.pub_key, None) is not None
+        return self.neighbors.get(addr.ip, None) is not None
 
     def allow_new_neighbor(self) -> bool:
         """Checks have any place for new neighbors in which
@@ -157,10 +152,10 @@ class Node(Connection):
 
     def iter_neighbors(self, forbidden: Iterable[str] = [], shuffle = True) -> Generator:
         """Iteration to its neighbors except they are not on the forbidden list"""
-        copy_neighbors_pub_key = deepcopy(list(self.neighbors.keys()))
+        copy_neighbors_ip = deepcopy(list(self.neighbors.keys()))
         if shuffle:
-            random.shuffle(copy_neighbors_pub_key)
-        for pub_key in copy_neighbors_pub_key:
+            random.shuffle(copy_neighbors_ip)
+        for pub_key in copy_neighbors_ip:
             addr = self.neighbors.get(pub_key)
             if addr is None:
                 continue  #! It's kinda non reachable at all
@@ -176,7 +171,7 @@ class Node(Connection):
         except asyncio.CancelledError:
             pass
 
-    async def start_up(self, seeds: List[str], get_blockchain = True) -> None:
+    async def start_up(self, seeds: List[str], get_blockchain = True, all_output: Optional[ALL_COINS_TYPE] = None) -> None:
         """(async) Begins to find new neighbors and connect to the blockchain network.
 
         Starts from some nodes and requests them to find some new neighbors nodes. After
@@ -243,9 +238,11 @@ class Node(Connection):
                     rec = Message.from_str(rec.decode())
                     if rec.status:
                         blockchain = BlockChain.json_to_blockchain(rec.data['blocks'])
+                        if all_output is not None:
+                            blockchain.update_coins_outputs(all_output)
                         logging.debug(f"Blockchain: {blockchain.blocks}")
-                        if self.proc_handler.blockchain.height < blockchain.height:
-                            self.proc_handler.blockchain = blockchain
+                        if self.proc_handler.pbcoin.blockchain.height < blockchain.height:
+                            self.proc_handler.pbcoin.blockchain = blockchain
                     else:
                         raise NotImplementedError()
             else:
@@ -279,18 +276,18 @@ class Node(Connection):
         List[Tuple[Addr, Errno, Dict[str, Any]]]
             Returns a list of errors the data contains: the address of which error
             response, the type's error, and the message data that will be needed.
-        
+
         See Also
         --------
         `ProcessHandler.handle_new_block()`
         """
         message = Message(True,
                           ConnectionCode.MINED_BLOCK,
-                          None,
+                          self.addr,
                           {"block": block.get_data()})
         errors = []
-        for pub_key in self.neighbors:
-            dst_addr = self.neighbors[pub_key]
+        for ip in self.neighbors:
+            dst_addr = self.neighbors[ip]
             message.addr = dst_addr
             response = await self.connect_and_send(dst_addr,
                                                    message.create_message(self.addr),
@@ -300,9 +297,10 @@ class Node(Connection):
             except:
                 continue  # NOTE: Here is not too much matter
             if not response.status:
+                # TODO: Refactor: Separate method inside blockchain
                 if response.type_ == Errno.BAD_BLOCK_VALIDATION:
-                    pre_hash = self.proc_handler.blockchain[block.block_height - 1].__hash__
-                    validation = block.is_valid_block(self.proc_handler.unspent_coins,
+                    pre_hash = self.proc_handler.pbcoin.blockchain[block.block_height - 1].__hash__
+                    validation = block.is_valid_block(self.proc_handler.pbcoin.all_outputs,
                                                       pre_hash=pre_hash)
                     if validation != BlockValidationLevel.ALL():
                         logging.error("Bad block is mined")
@@ -313,15 +311,21 @@ class Node(Connection):
                     request = Message(status = True,
                                       type_ = ConnectionCode.GET_BLOCKS,
                                       addr = dst_addr,
-                                      ).create_data(first_index = self.proc_handler.blockchain.height - 1)
+                                      ).create_data(first_index = self.proc_handler.pbcoin.blockchain.height - 1)
                     res = await self.connect_and_send(message.addr, request.create_message(self.addr))
+                    if not res:
+                        logging.debug("message cannot send or recieve correctly")
+                        return []  # TODO
                     res = Message.from_str(res.decode())
                     if res.status:
+                        if not res.data:
+                            logging.debug("message cannot read correctly")
+                            return []  # TODO
                         blocks = res.data['blocks']
                         blocks = [Block.from_json_data_full(block) for block in blocks]
-                        result, block_index, validation = self.proc_handler.blockchain.resolve(blocks, self.proc_handler.unspent_coins)
+                        result, block_index, validation = self.proc_handler.pbcoin.blockchain.resolve(blocks, self.proc_handler.pbcoin.all_outputs)
                         if result:
-                            logging.debug(f"new block chian: {self.proc_handler.blockchain.get_hashes()}")
+                            logging.debug(f"new block chian: {self.proc_handler.pbcoin.blockchain.get_hashes()}")
                             break
                         # TODO: Add penalty for node that badly response and tell it
                         else:
@@ -357,19 +361,19 @@ class Node(Connection):
         List[Tuple[Addr, Errno, Dict[str, Any]]]
             Returns a list of errors the data contains: the address of which error
             response, the type's error, and the message data that will be needed.
-        
+
         See Also
         --------
         `ProcessHandler.handle_new_trx()`
         """
-        message = Message(True, ConnectionCode.ADD_TRX, None)
+        message = Message(True, ConnectionCode.ADD_TRX, addr=self.addr, data=None)
         message = message.create_data(trx = trx.get_data(with_hash=True),
                                       signature = wallet.base64Sign(trx),
                                       public_key = wallet.public_key,
                                       passed_nodes = [self.addr.hostname])
         errors = []
-        for pub_key in self.neighbors:
-            dst_addr = self.neighbors[pub_key]
+        for ip in self.neighbors:
+            dst_addr = self.neighbors[ip]
             message.addr = dst_addr
             response = await self.connect_and_send(dst_addr,
                                                    message.create_message(self.addr),
@@ -419,5 +423,5 @@ class Node(Connection):
     @property
     def is_listening(self) -> bool:
         if hasattr(self, "server") or self.server is not None:
-            return self.server.is_serving
+            return self.server.is_serving()
         return False

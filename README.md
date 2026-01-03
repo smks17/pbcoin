@@ -1,6 +1,8 @@
 # pbcoin
 It is a simple blockchain with POW Consensus
 
+**NOTE: TESTS ARE NOT VALID YET AFTER REFACTORING COMMIT**
+
 # run
 Note: this project just was tested in python >= 3.8 and also is in development.
 
@@ -28,7 +30,7 @@ First make venv folder for python apps in powershell and then install the apps:
 ```console
     python3 -m venv env
     source env/bin/activate
-    pip3 install --editable . 
+    pip3 install --editable .
 ```
 Now you can run program node or pbcoin-cli. For example for running two nodes:
 

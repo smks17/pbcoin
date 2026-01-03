@@ -7,11 +7,11 @@ from enum import Flag, auto
 from operator import or_ as _or_
 from hashlib import sha256
 from sys import getsizeof
-from typing import Any, Dict, Optional
+from typing import Any, List, Optional
 
 import pbcoin.config as conf
 from pbcoin.merkle_tree import MerkleTreeNode
-from pbcoin.trx import Coin, Trx
+from pbcoin.trx import ALL_COINS_TYPE, Coin, Trx
 
 
 class BlockValidationLevel(Flag):
@@ -96,10 +96,10 @@ class Block:
         self.build_merkle_tree()
         self.calculate_hash()
         # Sets input to spent coin
-        for i, coin in enumerate(trx.inputs):
+        for i, coin in enumerate(trx.inputs or []):
             coin.spend(trx.__hash__, i)
         # Set created_trx_hash of output coins.
-        for i, coin in enumerate(trx.outputs):
+        for i, coin in enumerate(trx.outputs or []):
             coin.created_trx_hash = trx.__hash__
             coin.out_index = i
 
@@ -117,9 +117,9 @@ class Block:
         self.time = datetime.utcnow().timestamp()
         self.is_mined = True
 
-    def check_trx(self, unspent_coins: dict[str, Coin]) -> bool:
-        """Checks the all block transactions. 
-        
+    def check_trx(self, unspent_coins: ALL_COINS_TYPE) -> bool:
+        """Checks the all block transactions.
+
         See Also
         -------
         `trx.check()`
@@ -130,16 +130,17 @@ class Block:
                 return False
         return True
 
-    def update_outputs(self, unspent_coins: dict[str, Coin]) -> None:
+    def update_outputs(self, unspent_coins: ALL_COINS_TYPE) -> None:
         """update "database"(TODO) of output coins that are unspent"""
+        # TODO: Not do operation inplace
         for trx in self.transactions:
-            in_coins = trx.inputs
-            out_coins = trx.outputs
+            in_coins = trx.inputs or []
+            out_coins = trx.outputs or []
             for coin in in_coins:
                 # check input coin and if is valid, delete from unspent coins
                 if coin.check_input_coin(unspent_coins):
-                    my_unspent = unspent_coins[coin.created_trx_hash]
-                    my_unspent[coin.out_index] = None
+                    my_unspent: List[Coin | None] = unspent_coins[coin.created_trx_hash]
+                    my_unspent[coin.out_index] = None  # TODO: Fix typing
                     if not any(my_unspent):
                         # delete input coin from unspent_coins coins
                         unspent_coins.pop(coin.created_trx_hash)
@@ -151,12 +152,12 @@ class Block:
                 trx_hash = coin.created_trx_hash
                 unspent_coins[trx_hash] = deepcopy(out_coins)
 
-    def revert_outputs(self, unspent_coins: dict[str, Coin]):
+    def revert_outputs(self, unspent_coins: ALL_COINS_TYPE):
         """Gets the unspent coins and reverse it inplace by this block transaction"""
         # TODO: Relocated this method. here is a bad place for it.
         for trx in self.transactions:
-            in_coins = trx.inputs
-            out_coins = trx.outputs
+            in_coins = trx.inputs or []
+            out_coins = trx.outputs or []
             # add input coins to unspent coins
             for coin in out_coins:
                 trx_hash = coin.created_trx_hash
@@ -175,6 +176,7 @@ class Block:
     def calculate_hash(self) -> str:
         if self.merkle_tree is None:
             self.build_merkle_tree()
+        assert self.merkle_tree
         data = self.merkle_tree.hash + str(self.nonce) + self.previous_hash + str(self.time)
         calculated_hash = sha256((data).encode()).hexdigest()
         self.block_hash = calculated_hash
@@ -182,7 +184,7 @@ class Block:
 
     def is_valid_block(
         self,
-        unspent_coins: Dict[str, Coin] = None,
+        unspent_coins: Optional[ALL_COINS_TYPE] = None,
         pre_hash: str = "",
         difficulty: Optional[int] = None  # almost for unittest
     ) -> BlockValidationLevel:
@@ -190,7 +192,7 @@ class Block:
 
         Parameters
         ---------
-        unspent_coins: Optional[Dict[str, Coin]] = None
+        unspent_coins: Optional[Dict[str, List[Coin]]] = None
             The coins that have not been spent yet. It's used to check the validation
             block (transactions).
         pre_hash: str = ""
@@ -211,7 +213,7 @@ class Block:
         if int(self.__hash__, 16) <= difficulty:
             valid = valid | BlockValidationLevel.DIFFICULTY
         # check all trx
-        if self.check_trx(unspent_coins):
+        if unspent_coins is not None and self.check_trx(unspent_coins):
             valid = valid | BlockValidationLevel.TRX
         # check previous hash
         if self.previous_hash == pre_hash:
@@ -261,7 +263,7 @@ class Block:
             "height": self.block_height,
             "nonce": self.nonce,
             "number_trx": len(self.transactions),
-            "merkle_root": self.merkle_tree.hash,
+            "merkle_root": self.merkle_tree.hash if self.merkle_tree else None,
             "trx_hashes": self.get_list_hashes_trx(),
             "previous_hash": self.previous_hash,
             "time": self.time if is_POSIX_timestamp else datetime.fromtimestamp(self.time).__str__()
@@ -293,7 +295,8 @@ class Block:
         new_block = Block(data['previous_hash'], data['height'])
         new_block.block_hash = data['hash']
         new_block.nonce = data['nonce']
-        new_block.trx_hashes = data['trx_hashes']
+        # FIXME: Get trx object
+        # new_block.trx_hashes = data['trx_hashes']
         new_block.merkle_tree = MerkleTreeNode(data['merkle_root'])
         if is_POSIX_timestamp:
             new_block.time = data['time']
@@ -302,7 +305,7 @@ class Block:
         return new_block
 
     @staticmethod
-    def from_json_data_full(data: dict['str', any], is_POSIX_timestamp=True) -> Block:
+    def from_json_data_full(data: dict['str', Any], is_POSIX_timestamp=True) -> Block:
         """gets a block full data like `get_block` function and then
         make a Block object from that.
 
@@ -350,7 +353,7 @@ class Block:
         return __o.__hash__ == self.__hash__
 
     def __str__(self) -> str:
-        return self.transactions.__str__() + str(self.proof) + self.previous_hash
+        return self.transactions.__str__() + str(self.nonce) + self.previous_hash
 
     def __repr__(self) -> str:
         return self.block_hash[-8:]

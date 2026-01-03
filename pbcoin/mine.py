@@ -1,15 +1,19 @@
 from copy import deepcopy
-from typing import Dict, List, Optional, Union
+from functools import wraps
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 import pbcoin.config as conf
-import pbcoin.core as core
-from pbcoin.block import Block
 from pbcoin.blockchain import BlockChain
 from pbcoin.logger import getLogger
 from pbcoin.mempool import Mempool
-from pbcoin.network import Node
-from pbcoin.trx import Coin, Trx
-from pbcoin.wallet import Wallet
+from pbcoin.trx import ALL_COINS_TYPE, Trx
+
+if TYPE_CHECKING:
+    from pbcoin.block import Block
+    from pbcoin.db import DB
+    from pbcoin.network import Node
+    from pbcoin.trx import Coin
+    from pbcoin.wallet import Wallet
 
 logging = getLogger(__name__)
 
@@ -38,16 +42,17 @@ class Mine:
         node: Optional[Node]
             A Node object for declare other nodes
     """
+
+    stop_mining: bool = False
+
     def __init__(
         self,
-        blockchain: Union[BlockChain, List[Block]],
-        wallet: Optional[Wallet],
+        blockchain: BlockChain | List["Block"],
+        wallet: Optional["Wallet"],
         mempool: Mempool,
-        node: Optional[Node] = None,
     ):
         """Initializes object attribute"""
         self.blockchain = blockchain
-        self.node = node
         self.mempool = mempool
         self.wallet = wallet
         self.reset()
@@ -61,11 +66,13 @@ class Mine:
 
     async def mine(
         self,
-        setup_block: Optional[Block] = None,
-        unspent_coins: Optional[Dict[str, List[Coin]]] = None,  # almost just for unittest
+        public_key: str,
+        unspent_coins: ALL_COINS_TYPE,
+        setup_block: Optional["Block"] = None,
         add_block = True,
         difficulty: Optional[int] = None,  # almost just for unittest
-        send_network: Optional[bool] = None  # almost just for unittest
+        node: Optional["Node"] = None,
+        db: Optional["DB"] = None
     ) -> None:
         """(async) Start mining for a new block
 
@@ -93,27 +100,21 @@ class Mine:
             The difficulty in which the block hash should be less (equal) than.
             The difficulty should be an unsigned int and less than 2^256.
             If it's passed None, it gets that from configs.
-        send_network: Optional[bool] = None
-            If it is True, then after mining, The mined block will be sent
+        node: Optional[Node] = None
+            If it is provided, then after mining, The mined block will be sent
             to other nodes from the networks.
-            If it's passed None, it gets that from configs.
-        
+
         Return
         ------
         nothing
         """
         if difficulty is None:
             difficulty = conf.settings.glob.difficulty
-        if send_network is None:
-            send_network = conf.settings.glob.network
-        if unspent_coins is None:
-            unspent_coins = core.ALL_OUTPUTS
         # setup block
         if setup_block is not None:
             self.setup_block = setup_block
-        elif type(self.blockchain) is BlockChain:
-            # TODO: get wallet object not using direct from core.py
-            subsidy = Trx(self.blockchain.height, core.WALLET.public_key)
+        elif isinstance(self.blockchain, BlockChain):
+            subsidy = Trx(self.blockchain.height, public_key)
             self.setup_block = self.blockchain.setup_new_block(
                 mempool=self.mempool, subsidy=subsidy)
         else:
@@ -155,22 +156,24 @@ class Mine:
         if self.mined_new:
             logging.info("A Block was mined")
             logging.debug(f"minded block info: {self.setup_block.get_data(True, False)}")
-            if add_block and type(self.blockchain) is BlockChain:
+            if add_block and isinstance(self.blockchain, BlockChain):
                 # add new blocks to other
                 self.blockchain.add_new_block(self.setup_block,
                                               ignore_validation=True,
                                               unspent_coins=unspent_coins,
-                                              difficulty=difficulty)
+                                              difficulty=difficulty,
+                                              db=db)
+                logging.debug(f"New blockchain: {self.blockchain.get_hashes()}")
             # if blockchian in just a List type
-            elif add_block:
+            elif add_block and isinstance(self.blockchain, list):
                 self.blockchain.append(self.setup_block)
                 logging.debug("New blockchain: ",
                               [block.__hash__ for block in self.blockchain])
-            if send_network and self.node is not None:
+                logging.debug(f"New blockchain: {[b.__hash__ for b in self.blockchain]}")
+            if node is not None:
                 # send mine block to other node
                 # TODO: Check result
-                await self.node.send_mined_block(self.setup_block)
-                logging.debug(f"New blockchain: {self.blockchain.get_hashes()}")
+                await node.send_mined_block(self.setup_block)
             # remove mined transactions
             self.mempool.remove_transactions(self.setup_block.hash_list_trx)
             # TODO: returns the result of mining
@@ -184,3 +187,14 @@ class Mine:
         else:
             height = self.blockchain.height
         return height > last_n
+
+    @classmethod
+    def interrupt_mining(cls):
+        @wraps
+        async def decorator(func: Callable, *args: Any, **kwargs: Any):
+            cls.stop_mining = True
+            try:
+                await func(*args, **kwargs)
+            finally:
+                cls.stop_mining = False
+        return decorator

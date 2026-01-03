@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-from typing import (
-    Any,
-    Dict,
-    List,
-    Optional,
-    Tuple
-)
+from typing import Any, Dict, List, NewType, Optional, Tuple
 from datetime import datetime
 from hashlib import sha256
 
 from pbcoin.constants import SUBSIDY
+
+
+ALL_COINS_TYPE = NewType("ALL_COINS_TYPE", Dict[str, List["Coin"]])
 
 
 class Coin:
@@ -32,13 +29,16 @@ class Coin:
     hash_coin: str
         Hash string of this coin (in hex).
     """
-    def __init__(self,
-                 owner: str,
-                 out_index: int,
-                 created_trx_hash: str = "",
-                 value: int=SUBSIDY,
-                 trx_hash: Optional[str]=None,
-                 in_index: Optional[int]=None):
+
+    def __init__(
+        self,
+        owner: str,
+        out_index: int,
+        created_trx_hash: str = "",
+        value: int = SUBSIDY,
+        trx_hash: Optional[str] = None,
+        in_index: Optional[int] = None,
+    ):
         """Initializes attributes except hash"""
         self.owner = owner
         self.value = value
@@ -77,7 +77,7 @@ class Coin:
 
     def get_data(self) -> Dict[str, Any]:
         """Returns a dictionary from coin data.
-        
+
         See Also
         --------
         `class Coin` docs"""
@@ -93,19 +93,25 @@ class Coin:
         return data
 
     def __eq__(self, __o: object) -> bool:
-        return (self.created_trx_hash == __o.created_trx_hash and
-                self.in_index == __o.in_index and
-                self.owner == __o.owner and
-                self.value == __o.value)
+        return (
+            self.created_trx_hash == __o.created_trx_hash
+            and self.in_index == __o.in_index
+            and self.owner == __o.owner
+            and self.value == __o.value
+        )
 
     def __repr__(self) -> str:
         if self.is_spent:
-            return f"{self.value} from {self.owner[:8]} "  \
-                   f"created in transaction {self.created_trx_hash[:8]} with index {self.in_index} "  \
-                   f"was spent in transaction {self.trx_hash[:8]} with index {self.out_index}"
-        return f"{self.value} from {self.owner[:8]} "  \
-               f"created in transaction {self.created_trx_hash[:8]} with index {self.in_index} "  \
-               f"and be not spent"
+            return (
+                f"{self.value} from {self.owner[:8]} "
+                f"created in transaction {self.created_trx_hash[:8]} with index {self.in_index} "
+                f"was spent in transaction {self.trx_hash[:8]} with index {self.out_index}"
+            )
+        return (
+            f"{self.value} from {self.owner[:8]} "
+            f"created in transaction {self.created_trx_hash[:8]} with index {self.in_index} "
+            f"and be not spent"
+        )
 
     def calculate_hash(self) -> str:
         """calculate this coin hash sha256 and set the `self.coin_hash`
@@ -121,9 +127,9 @@ class Coin:
     def __hash__(self) -> str:
         return self.calculate_hash() if not self.hash_coin else self.hash_coin
 
-    def check_input_coin(self, unspent_coins: dict[str, Coin]) -> bool:
+    def check_input_coin(self, unspent_coins: ALL_COINS_TYPE) -> bool:
         """Check the coin that is able to spent or not.
-        
+
         Parameters
         ----------
         unspent_coins: Optional[Dict[str, Coin]] = None
@@ -214,10 +220,7 @@ class Trx:
 
     @staticmethod
     def make_trx(
-        owner_coins: List[Coin],
-        sender_key: str,
-        recipient_key: str,
-        value: float
+        owner_coins: List[Coin], sender_key: str, recipient_key: str, value: float
     ) -> Trx:
         """
         Just creates a transaction object from owner coins.
@@ -295,17 +298,24 @@ class Trx:
         --------
         `class Trx` docs
         """
-        inputs = [in_coin.get_data() for in_coin in self.inputs] if not self.is_generic else []
+        inputs = (
+            [in_coin.get_data() for in_coin in self.inputs]
+            if not self.is_generic
+            else []
+        )
         outputs = [out_coin.get_data() for out_coin in self.outputs]
         data = {
-            'inputs': inputs,
-            'outputs': outputs,
-            'value': self.value,
-            'time': self.time if is_POSIX_timestamp else datetime.fromtimestamp(self.time),
-            'include_block': self.include_block,
+            "inputs": inputs,
+            "outputs": outputs,
+            "value": self.value,
+            "time": self.time
+            if is_POSIX_timestamp
+            else datetime.fromtimestamp(self.time),
+            "include_block": self.include_block,
+            "hash": self.__hash__,
         }
         if with_hash:
-            data['hash'] = self.__hash__
+            data["hash"] = self.__hash__
         return data
 
     def check(self, unspent_coins: Dict[str, Any]) -> bool:
@@ -323,7 +333,12 @@ class Trx:
             if self.time <= datetime(2022, 1, 1).timestamp():
                 return False
             # check trx hash output coin
-            if not all([out_coin.created_trx_hash == self.hash_trx for out_coin in self.outputs]):
+            if not all(
+                [
+                    out_coin.created_trx_hash == self.hash_trx
+                    for out_coin in self.outputs
+                ]
+            ):
                 return False
         return True
 
@@ -332,7 +347,7 @@ class Trx:
         return self.calculate_hash() if not self.hash_trx else self.hash_trx
 
     def __str__(self) -> str:
-        return f'{str(self.inputs)}{str(self.outputs)}{self.time}'
+        return f"{str(self.inputs)}{str(self.outputs)}{self.time}"
 
     def __repr__(self) -> str:
-        return f'({self.value} coins from {self.senders} to {self.recipients} on {datetime.fromtimestamp(self.time)})'
+        return f"({self.value} coins from {self.senders} to {self.recipients} on {datetime.fromtimestamp(self.time)})"

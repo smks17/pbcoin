@@ -10,12 +10,10 @@ import pbcoin.config as conf
 from pbcoin.utils.address import Address
 from pbcoin.utils.tuple_util import tuple_to_string
 if TYPE_CHECKING:
-    from pbcoin.blockchain import BlockChain
     from pbcoin.mempool import Mempool
     from pbcoin.network import Node
 
 from pbcoin.trx import Trx, Coin
-import pbcoin.core as core
 
 #TODO: separate wallet from node
 #TODO: Write testcase for Wallet
@@ -33,10 +31,11 @@ class Wallet:
     _address: Address
 
     def __init__(self,
+                 unspent_coins: Dict[str, List[Coin]],
                  path_secret_key: str = r"./.key",  # TODO: use global variable
                  wallet_name: Optional[str] = None,
                  generate = True,
-                 unspent_coins: Optional[Dict[str, Coin]] = None):
+    ):
         """
         Parameters
         ----------
@@ -67,8 +66,6 @@ class Wallet:
             self.gen_key(output_path)
         else:
             self.load_key(output_path)
-        if unspent_coins is None:
-            unspent_coins = core.ALL_OUTPUTS
         self.unspent_coins = unspent_coins
 
     def gen_key(self, path: str) -> None:
@@ -87,7 +84,7 @@ class Wallet:
                         node: Optional[Node] = None,  # just uses for unittest
     ) -> bool:
         """(async) Makes/Creates a transaction and be sent it to other nodes.
-        
+
         Parameters
         ----------
         recipient: str
@@ -100,29 +97,25 @@ class Wallet:
         node: Optional[Node] = None,
             The Node object that uses to send the new transaction to other nodes. If it's
             passed None, it gets that from `core.py` file.
-        
+
         Returns
         -------
         bool
             returns True if all things are going well and that wallet has the amount of
             transaction to send.
         """
-        if mempool is None:
-            mempool = core.MEMPOOL
-        if node is None:
-            node = core.NETWORK
         # if user have amount for sending
         if value <= self.balance:
             made_trx = Trx.make_trx(sum(list(self.out_coins.values()), []),
                                     self.public_key, recipient, value)
             # add to own mempool
-            if not mempool.add_new_transaction(made_trx,
+            if mempool and not mempool.add_new_transaction(made_trx,
                                                self.sign(made_trx),
                                                self.public_key,
                                                self.unspent_coins):
                 return False
             # send to nodes and add to network mempool
-            if conf.settings.glob.network:
+            if node and conf.settings.glob.network:
                 await node.send_new_trx(made_trx, self)
             return True
         else:
@@ -140,7 +133,7 @@ class Wallet:
 
     def base64Sign(self, trx) -> bytes:
         """Signs data and return base 64 signature
-        
+
         See Also
         --------
         `Address.sign()`
@@ -157,6 +150,7 @@ class Wallet:
     @property
     def balance(self) -> int:
         """The summation of unspent output coins values that makes my balance"""
+        # TODO: THIS IS NOT EFFICIENT WAY
         amount = 0
         for created_trx_hash in self.unspent_coins:
             coins = self.unspent_coins[created_trx_hash]

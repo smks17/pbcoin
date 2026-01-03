@@ -2,7 +2,7 @@ import sys
 import socket
 import os
 import traceback
-from typing import IO, List, Optional
+from typing import List, Optional
 
 if os.name == 'nt':
     import win32pipe
@@ -32,14 +32,12 @@ def cli_unix(command_code, args: List[str], socket_path: Optional[str]=None):
     if socket_path is None:
         socket_path = PIPE_SOCKET_PATH
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock_io: IO
     try:
         sock.connect(socket_path)
-        sock_io = sock.makefile('wr')
-    except:
-        print(
-            "ERROR: Could not connect node. node probably is not running.", file=sys.stderr)
+    except Exception as exc:
+        raise Exception(f"ERROR: Could not connect node socket '{socket_path}'. node probably is not running.") from exc
     try:
+        sock_io = sock.makefile('wr')
         sock_io.write(f"{command_code} {' '.join(args)}\n")
         sock_io.flush()
         result = sock_io.readline()
@@ -54,6 +52,9 @@ def cli_unix(command_code, args: List[str], socket_path: Optional[str]=None):
     except:
         print("ERROR: No response from node", file=sys.stderr)
         traceback.print_exc()
+    finally:
+        sock_io.close()
+        sock.close()
 
 
 def cli_win(command_code, args: List[str], pipe_path: Optional[str]=None):

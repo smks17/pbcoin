@@ -20,7 +20,7 @@ class ConnectionCode(IntEnum):
     MINED_BLOCK = auto()  # declare other nodes find a new block
     RESOLVE_BLOCKCHAIN = auto()  # for resolving blockchain of 2 nodes
     GET_BLOCKS = auto()  # request for getting some blocks
-    # TODO: remove SEND_BLOCKS 
+    # TODO: remove SEND_BLOCKS
     SEND_BLOCKS = auto()  # responds to GET_BLOCKS
     ADD_TRX = auto()  # new trx for add to mempool
     PING_PONG = auto()  # For pinging other nodes and check connection
@@ -36,7 +36,7 @@ class Errno(IntEnum):
 
 class Message:
     """A Message class that contains network message data and information
-    
+
     Attributes
     ----------
     status: bool
@@ -51,7 +51,7 @@ class Message:
     status: bool
     type_: Union[ConnectionCode, Errno]
     addr: Addr
-    data: Dict[str, Any]
+    data: Optional[Dict[str, Any]]
 
     def __init__(self,
                  status: bool,
@@ -59,7 +59,7 @@ class Message:
                  addr: Addr,
                  data: Optional[Dict[str, Any]] = None):
         """Initialize object attribute
-        
+
         See Also
         --------
         `Message` docs
@@ -69,7 +69,7 @@ class Message:
         self.addr = addr
         self.data = data
 
-    def create_message(self, my_addr: Addr) -> bytes:
+    def create_message(self, my_addr: Addr) -> str:
         """Gathers info and makes a JSON object and converts it to a bytes array"""
         base_data = {
             "status": self.status,
@@ -162,7 +162,7 @@ class Message:
             elif self.type_ == ConnectionCode.PING_PONG:
                 self.data = None
         except KeyError:
-            logging.error("Bad kwargs for creating message data", exec_info=True)
+            logging.error("Bad kwargs for creating message data")
         return self
 
     def copy(self) -> Message:

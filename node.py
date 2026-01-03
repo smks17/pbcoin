@@ -66,8 +66,9 @@ def main():
     argv = sys.argv
     option = parse_argv(argv)
     conf.settings.update(option)
-    from pbcoin.runner import run
-    run()
+    from pbcoin.core import Pbcoin
+    pbcoin = Pbcoin.initialize()
+    pbcoin.run()
 
 
 if __name__ == "__main__":

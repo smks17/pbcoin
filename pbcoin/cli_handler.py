@@ -6,7 +6,7 @@ import socket
 import os
 import traceback
 from sys import platform
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 if os.name == 'nt':
     import win32pipe
@@ -24,7 +24,7 @@ logging = getLogger(__name__)
 class CliServer():
     """The class runs a local server to interact with the Cli application. All object
     that it needs gets from `core.py`"""
-    def __init__(self, socket_path) -> None:
+    def __init__(self, socket_path: Any, pbcoin: core.Pbcoin) -> None:
         """socket_path for unix os is a path to unix socket like: './node_socket.s'
         but for windows os is a path to pipe socket like: '//./pipe/node_socket'
         """
@@ -35,19 +35,19 @@ class CliServer():
         except:
             self.is_unix = False
             self.pipe_path = socket_path
+        self.pbcoin = pbcoin
 
     async def handle_cli_command_unix(self,
                                       reader: asyncio.StreamReader,
                                       writer: asyncio.StreamWriter):
         """(async) Handles the cli user input from receive data UNIX socket"""
         recv = await reader.readuntil(b'\n')
-        recv = recv.decode()
+        recv = recv.decode().strip()
         # TODO: better receive (make a buffer class)
         args = recv.split()
         command = args.pop(0)
         result, errors = await self.parse_args(int(command), args)
         writer.write(result.encode()+b'\n')
-        await writer.drain()
         writer.write(f'{errors.value}\n'.encode())
         await writer.drain()
         writer.close()
@@ -127,24 +127,24 @@ class CliServer():
                 amount = int(args[1])
             except:
                 errors |= CliErrorCode.BAD_USAGE
-            res = await core.WALLET.send_coin(recipient, amount)
+            res = await self.pbcoin.wallet.send_coin(recipient, amount, self.pbcoin.mempool, self.pbcoin.network)
             if not res:
                 errors |= CliErrorCode.TRX_PROBLEM
         elif command == CliCommandCode.BALANCE:
-            result += str(core.WALLET.balance)
+            result += str(self.pbcoin.wallet.balance if self.pbcoin.wallet else None)
         elif command == CliCommandCode.BLOCK:
             try:
                 if args[0] == '--last':
-                    last_block = core.BLOCK_CHAIN.last_block
+                    last_block = self.pbcoin.blockchain.last_block
                     if last_block:
                         block_data = last_block.get_data(is_POSIX_timestamp=False)
                         result += json.dumps(block_data)
                     else:
                         errors |= CliErrorCode.NOT_FOUND
                 else:
-                    index_block = core.BLOCK_CHAIN.search(args[0])
+                    index_block = self.pbcoin.blockchain.search(args[0])
                     if index_block:
-                        b = core.BLOCK_CHAIN.blocks[index_block]
+                        b = self.pbcoin.blockchain.blocks[index_block]
                         block_data = b.getData(is_POSIX_timestamp=False)
                         result += json.dumps(block_data)
                     else:
@@ -153,23 +153,23 @@ class CliServer():
                 errors |= CliErrorCode.BAD_USAGE
                 traceback.print_exc()
         elif command == CliCommandCode.MEMPOOL:
-            result += str(core.MINER.mempool)
+            result += str(self.pbcoin.miner.mempool if self.pbcoin.miner else None)
         elif command == CliCommandCode.NEIGHBORS:
-            result += str(core.NETWORK.neighbors.values())
+            result += str(self.pbcoin.network.neighbors.values())
         elif command == CliCommandCode.MINING:
             arg = args.pop()
             if arg == 'on':
-                if core.MINER.stop_mining:
-                    core.MINER.stop_mining = False
+                if self.pbcoin.miner.stop_mining:
+                    self.pbcoin.miner.stop_mining = False
                 else:
                     errors |= CliErrorCode.MINING_ON
             elif arg == 'off':
-                if not core.MINER.stop_mining:
-                    core.MINER.stop_mining = True
+                if not self.pbcoin.miner.stop_mining:
+                    self.pbcoin.miner.stop_mining = True
                 else:
                     errors |= CliErrorCode.MINING_OFF
             elif arg == 'state':
-                state = "stopped" if core.MINER.stop_mining else "running"
+                state = "stopped" if self.pbcoin.miner.stop_mining else "running"
                 result += state
             else:
                 errors |= CliErrorCode.BAD_USAGE

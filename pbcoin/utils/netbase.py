@@ -25,7 +25,7 @@ AsyncReader = NewType("AsyncReader", asyncio.StreamReader)
 @dataclass
 class Addr:
     """Basic structure network address
-    
+
     Attributes
     ----------
     ip: str
@@ -65,7 +65,7 @@ class Addr:
     def __hash__(self) -> int:
         return hash(self.__str__())
 
-    def __eq__(self, __o: object) -> bool:
+    def __eq__(self, __o: "Addr") -> bool:
         return (self.ip == __o.ip and self.port == __o.port and self.pub_key == __o.pub_key)
 
 
@@ -87,7 +87,7 @@ class Connection:
 
     async def connect_to(self, dst_addr: Addr) -> Optional[Peer]:
         """(async) Makes a connection to destination address.
-        
+
         Parameters
         ----------
         dst_addr: Addr
@@ -95,7 +95,7 @@ class Connection:
         Return
         ------
         Optional[Peer]
-            A Peer object with connection. If making connection is not successfully 
+            A Peer object with connection. If making connection is not successfully
             returns None.
         """
         try:
@@ -157,7 +157,7 @@ class Connection:
         return rec_data
 
     async def write(self,
-                    writer: AsyncWriter,
+                    writer: asyncio.StreamWriter,
                     data: Union[str, bytes],
                     addr: Optional[Addr] = None,
                     flush: bool = True) -> Optional[Exception]:
@@ -165,7 +165,7 @@ class Connection:
 
         Parameters
         ----------
-        writer: AsyncWriter
+        writer: asyncio.StreamWriter
             A stream writer for writing in it and sending data to the destination.
         data: Union[str, bytes]
             The data that wants to be sent to the destination.
@@ -202,12 +202,12 @@ class Connection:
             return e
         return None
 
-    async def read(self, reader: AsyncReader, addr: Optional[Addr] = None) -> Optional[bytes]:
+    async def read(self, reader: asyncio.StreamReader, addr: Optional[Addr] = None) -> Optional[bytes]:
         """(async) Writes the data from writer stream from the destination.
 
         Parameters
         ----------
-        reader: AsyncReader
+        reader: asyncio.StreamReader
             A stream reader for reading from it and receiving data from the destination.
         addr: Optional[Addr] = None
             The destination address from which the data wants to be received.
@@ -238,14 +238,14 @@ class Connection:
 class Peer:
     """To keep information connected peer"""
     addr: Addr
-    writer: Optional[AsyncWriter]
-    reader: Optional[AsyncReader]
+    writer: asyncio.StreamWriter
+    reader: asyncio.StreamReader
     is_connected: bool
 
     def __init__(self,
-                 addr: Optional[Addr] = None,
-                 writer: Optional[AsyncWriter] = None,
-                 reader: Optional[AsyncReader] = None,
+                 addr: Addr,
+                 writer: asyncio.StreamWriter,
+                 reader: asyncio.StreamReader,
                  is_connected: bool = True):
         self.addr = addr
         self.writer = writer

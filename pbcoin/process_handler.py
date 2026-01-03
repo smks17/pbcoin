@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from copy import copy, deepcopy
-from typing import TYPE_CHECKING, Dict, Optional
+from copy import copy
+from typing import TYPE_CHECKING, Optional
 
+import pbcoin
 from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.constants import TOTAL_NUMBER_CONNECTIONS
+from pbcoin.mine import Mine
 from pbcoin.utils.netbase import Addr, Peer
 from pbcoin.netmessage import ConnectionCode, Errno, Message
 from pbcoin.utils.tuple_util import tuple_from_string
 from pbcoin.logger import getLogger
 from pbcoin.trx import Coin, Trx
 if TYPE_CHECKING:
-    from pbcoin.blockchain import BlockChain
-    from pbcoin.mempool import Mempool
+    from pbcoin.core import Pbcoin
     from pbcoin.network import Node
-    from pbcoin.wallet import Wallet
 
 logging = getLogger(__name__)
 
@@ -33,19 +33,12 @@ class ProcessingHandler:
     mempool: Mempool
         A Mempool object to add transactions
     """
-    def __init__(self,
-                 blockchain: BlockChain,
-                 unspent_coins: Dict[str, Coin],
-                 wallet: Wallet,
-                 mempool: Mempool):
-        self.blockchain = blockchain
-        self.unspent_coins = unspent_coins
-        self.wallet = wallet  # TODO: use public key (address)
-        self.mempool = mempool
+    def __init__(self, pbcoin: Pbcoin):
+        self.pbcoin = pbcoin
 
-    async def handle(self, *args) -> None:
+    async def handle(self, message: Message,  *args) -> None:
         """(async) Handles the request that a node was sended.
-        
+
         Parameters
         ----------
         message: Message
@@ -62,26 +55,29 @@ class ProcessingHandler:
         NOTE:: All other methods of this class have the same parameters and return item.
         And also they are async function too.
         """
-        message: Message = args[0]
         # TODO: Check the structure of message data is correct or not
-        if not message.status:
-            self.handle_error()
-        if message.type_ == ConnectionCode.NEW_NEIGHBOR:
-            await self.handle_new_neighbor(*args)
-        elif message.type_ == ConnectionCode.NEW_NEIGHBORS_REQUEST:
-            await self.handle_request_new_node(*args)
-        elif message.type_ == ConnectionCode.NOT_NEIGHBOR:
-            await self.handle_delete_neighbor(*args)
-        elif message.type_ == ConnectionCode.MINED_BLOCK:
-            await self.handle_mined_block(*args)
-        elif message.type_ == ConnectionCode.RESOLVE_BLOCKCHAIN:
-            await self.handle_resolve_blockchain(*args)
-        elif message.type_ == ConnectionCode.GET_BLOCKS:
-            await self.handle_get_blocks(*args)
-        elif message.type_ == ConnectionCode.ADD_TRX:
-            await self.handle_new_trx(*args)
-        elif message.type_ == ConnectionCode.PING_PONG:
-            await self.handle_ping(*args)
+        try:
+            if not message.status:
+                self.handle_error(message, *args)
+            if message.type_ == ConnectionCode.NEW_NEIGHBOR:
+                await self.handle_new_neighbor(message, *args)
+            elif message.type_ == ConnectionCode.NEW_NEIGHBORS_REQUEST:
+                await self.handle_request_new_node(message, *args)
+            elif message.type_ == ConnectionCode.NOT_NEIGHBOR:
+                await self.handle_delete_neighbor(message, *args)
+            elif message.type_ == ConnectionCode.MINED_BLOCK:
+                await self.handle_mined_block(message, *args)
+            elif message.type_ == ConnectionCode.RESOLVE_BLOCKCHAIN:
+                await self.handle_resolve_blockchain(message, *args)
+            elif message.type_ == ConnectionCode.GET_BLOCKS:
+                await self.handle_get_blocks(message, *args)
+            elif message.type_ == ConnectionCode.ADD_TRX:
+                await self.handle_new_trx(message, *args)
+            elif message.type_ == ConnectionCode.PING_PONG:
+                await self.handle_ping(message, *args)
+        except Exception as e:
+            logging.critical("Error in processing handler", exc_info=e)
+
 
     def handle_error(self, message: Message, peer: Peer, node: Node):
         raise NotImplementedError("This method is not implemented yet!")
@@ -194,7 +190,7 @@ class ProcessingHandler:
 
     async def handle_delete_neighbor(self, message: Message, peer: Peer, node: Node):
         """(async) Handles requests to end with being themself neighbors.
-        
+
         See Also
         --------
         `handle_request_new_node()`
@@ -215,9 +211,10 @@ class ProcessingHandler:
             response = Message(False, 0, addr)
         await node.write(peer.writer, response.create_message(node.addr), message.addr)
 
+    @Mine.interrupt_mining()
     async def handle_mined_block(self, message: Message, peer: Peer, node: Node):
         """(async) Handles to request finder a new block.
-        
+
         First the block will been checked:
         - If the new block is just the next of the last block of the self blockchain and
         it is valid, then it will be added to the self blockchain.
@@ -239,11 +236,11 @@ class ProcessingHandler:
         logging.debug(f"Mine block from {message.addr.hostname}: {block_data} to check")
         block = Block.from_json_data_full(block_data['block'])
         # checking which blockchain is longer, mine or him?
-        if block.block_height > self.blockchain.height:
-            number_new_blocks = block.block_height - self.blockchain.height
+        if block.block_height > self.pbcoin.blockchain.height:
+            number_new_blocks = block.block_height - self.pbcoin.blockchain.height
             if number_new_blocks == 1:
                 # just this block is new
-                done = self.blockchain.add_new_block(block, self.unspent_coins)
+                done = self.pbcoin.blockchain.add_new_block(block, self.pbcoin.all_outputs, db=self.pbcoin.database)
                 if done != BlockValidationLevel.ALL():
                     error = Message(False, Errno.BAD_BLOCK_VALIDATION, peer.addr)
                     error = error.create_data(block_hash=block.__hash__,
@@ -252,27 +249,27 @@ class ProcessingHandler:
                     await node.write(peer.writer, error.create_message(node.addr))
                     logging.debug(f"Bad request mined block from {message.addr.hostname} validation: {done}")
                 else:
-                    last = self.blockchain.last_block
-                    last.update_outputs(self.unspent_coins)
+                    last = self.pbcoin.blockchain.last_block
+                    last.update_outputs(self.pbcoin.all_outputs)
                     logging.info(f"New mined block from {message.addr.hostname}")
                     logging.debug(f"info mined block from {message.addr.hostname}: {block.get_data()}")
                     ok_msg = Message(True, ConnectionCode.OK_MESSAGE, message.addr)
-                    logging.debug(f"new block chian: {self.blockchain.get_hashes()}")
+                    logging.debug(f"new block chian: {self.pbcoin.blockchain.get_hashes()}")
                     await node.write(peer.writer, ok_msg.create_message(node.addr))
             else:
                 # request for get n block before this block for add to its blockchain and resolve
                 request = Message(status = True,
                                   type_ = ConnectionCode.GET_BLOCKS,
                                   addr = message.addr,
-                                  ).create_data(first_index = self.blockchain.height)
+                                  ).create_data(first_index = self.pbcoin.blockchain.height)
                 res = await node.connect_and_send(message.addr, request.create_message(node.addr))
                 res = Message.from_str(res.decode())
                 if res.status:
                     blocks = res.data['blocks']
                     blocks = [Block.from_json_data_full(block) for block in blocks]
-                    result, block_index, validation = self.blockchain.resolve(blocks, self.unspent_coins)
+                    result, block_index, validation = self.pbcoin.blockchain.resolve(blocks, self.pbcoin.all_outputs)
                     if result:
-                        logging.debug(f"new block chian: {self.blockchain.get_hashes()}")
+                        logging.debug(f"new block chian: {self.pbcoin.blockchain.get_hashes()}")
                         ok_msg = Message(True, ConnectionCode.OK_MESSAGE, res.addr)
                         await node.write(peer.writer, ok_msg.create_message(node.addr))
                     else:
@@ -293,11 +290,12 @@ class ProcessingHandler:
                               peer.addr)
             await node.write(peer.writer, request.create_message(node.addr))
 
+    @Mine.interrupt_mining()
     async def handle_resolve_blockchain(self, message: Message, peer: Peer, node: Node):
         """(async) Handles request to resolve self blockchain with new blocks."""
         blocks = message.data['blocks']
         blocks = [Block.from_json_data_full(block) for block in blocks]
-        result, index_block, validation = self.blockchain.resolve(blocks, self.unspent_coins)
+        result, index_block, validation = self.pbcoin.blockchain.resolve(blocks, self.pbcoin.all_outputs)
         if not result:
             pass  # TODO: should tell other nodes that blocks have problem
         else:
@@ -308,7 +306,7 @@ class ProcessingHandler:
         """(async) Handles for requesting another node for getting blocks from the first
         index or first block hash until the last block.
         """
-        copy_blockchain = copy(self.blockchain)
+        copy_blockchain = copy(self.pbcoin.blockchain)
         first_index: Optional[int] = None
         hash_block = message.data.get('hash_block', None)
         if hash_block:
@@ -316,7 +314,7 @@ class ProcessingHandler:
         else:
             first_index = message.data.pop('first_index', None)
         request = None
-        if first_index is None or first_index > self.blockchain.height:
+        if first_index is None or first_index > self.pbcoin.blockchain.height:
             # doesn't have this specific chain or block(s)
             # TODO: maybe it's good to get from a full node
             logging.debug("doesn't have self chain!")
@@ -360,22 +358,22 @@ class ProcessingHandler:
                                 out_coin["created_trx_hash"],
                                 out_coin["value"]))
         time = trx_data['time']
-        new_trx = Trx(self.blockchain.height,
-                      self.wallet.public_key,
+        new_trx = Trx(self.pbcoin.blockchain.height,
+                      self.pbcoin.wallet.public_key,
                       inputs, outputs, time)
         # add to mempool and send other nodes
-        result = self.mempool.add_new_transaction(new_trx,
+        result = self.pbcoin.mempool.add_new_transaction(new_trx,
                                                   sig,
                                                   public_key,
-                                                  self.unspent_coins)
+                                                  self.pbcoin.all_outputs)
         if result:
             for pub_key in node.neighbors:
                 dst_addr = node.neighbors[pub_key]
                 if dst_addr.hostname not in message.data['passed_nodes']:
                     copy_msg = message.copy
-                    copy_msg.src_addr = self.node.addr
+                    copy_msg.src_addr = self.pbcoin.network.addr
                     copy_msg.dst_addr = dst_addr
-                    await self.connect_and_send(dst_addr, copy_msg.create_message(self.addr), False)
+                    await self.connect_and_send(dst_addr, copy_msg.create_message(self.pbcoin.network.addr), False)
             ok_message = Message(True, ConnectionCode.OK_MESSAGE, message.addr)
             await node.write(peer.writer, ok_message.create_message(node.addr), True)
         else:
