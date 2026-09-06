@@ -301,7 +301,7 @@ class Block:
         if is_POSIX_timestamp:
             new_block.time = data['time']
         else:
-            datetime.fromisoformat(data['time'])
+            new_block.time = datetime.fromisoformat(data['time']).timestamp()
         return new_block
 
     @staticmethod
@@ -322,11 +322,11 @@ class Block:
                 # TODO: It should be in Coin class
                 inputs.append(
                     Coin(in_coin['owner'],
-                         in_coin['in_index'],
+                         in_coin['out_index'],
                          in_coin['created_trx_hash'],
                          in_coin['value'],
                          in_coin['trx_hash'],
-                         in_coin['out_index']))
+                         in_coin['in_index']))
             outputs = []
             for coin_idx, out_coin in enumerate(each_trx['outputs']):
                 outputs.append(

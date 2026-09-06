@@ -45,9 +45,10 @@ class DB:
             data = deepcopy(block)
         header_block = data["header"]
         trx_hashes = header_block.pop("trx_hashes")
-        size = data.pop("size")
+        data.pop("size", None)
         for trx_data in data["trx"]:
             trx_data["hash"] = trx_hashes[trx_data["index"]]
+            trx_data["include_block"] = header_block["hash"]
             self.insert_trx(trx_data)
         self.db.insert(header_block, self.blocks_table_name)
 
@@ -58,7 +59,7 @@ class DB:
             trx_data = deepcopy(trx)
         inputs = trx_data.pop("inputs")
         outputs = trx_data.pop("outputs")
-        trx_data["t_index"] = trx_data.pop("index")
+        trx_data["t_index"] = trx_data.pop("index", 0)
         for coin_data in inputs + outputs:
             self.insert_coin(coin_data)
         self.db.insert(trx_data, self.trx_table_name)
@@ -76,13 +77,19 @@ class DB:
                            coin_data.items(),
                            self.coins_table_name)
 
-    def get_block(self, hash_str: Optional[str] = None, index: Optional[int] = None) -> Block:
+    def get_block(self,
+                  hash_str: Optional[str] = None,
+                  index: Optional[int] = None) -> Optional[Dict[str, Any]]:
         assert ((hash_str is not None) ^ (index is not None)),  \
             "Should been passed just (at least) hash_str or index to query"
         if hash_str is not None:
-            q = self.db.query("*", self.blocks_table_name, [("hash", hash_str)])[0]
-        elif index is not None:
-            q = self.db.query("*", self.blocks_table_name, [("index", index)])[0]
+            rows = self.db.query("*", self.blocks_table_name, [("hash", hash_str)])
+        else:
+            # the blocks are identified by their height, there is no index column
+            rows = self.db.query("*", self.blocks_table_name, [("height", index)])
+        if not rows:
+            return None
+        q = rows[0]
         block_header = {
             "hash": q[0],
             "height": int(q[1]),
@@ -93,7 +100,7 @@ class DB:
             "time": q[6]
         }
         # TODO: get by order index
-        list_trx, hash_list_trx = self.get_trx(block_hash = hash_str)
+        list_trx, hash_list_trx = self.get_trx(block_hash=block_header["hash"])
         block_header["trx_hashes"] = hash_list_trx
         block_data = {
             "header": block_header,
@@ -134,22 +141,22 @@ class DB:
                 "hash": q[0],
                 "include_block": q[1],
                 "value": int(q[2]),
-                "index": int(q[3]),
-                "time": int(q[4])
+                "index": index,
+                "time": float(q[4])
             }
-            inputs = self.get_coin(created_trx_hash=q[0])
-            trx_data["inputs"] = inputs
-            outputs = self.get_coin(trx_hash=q[0])
-            trx_data["outputs"] = outputs
+            trx_data["inputs"] = self.get_coin(trx_hash=q[0])
+            trx_data["outputs"] = self.get_coin(created_trx_hash=q[0])
             list_trx.insert(index, trx_data)
-            return list_trx, hash_list_trx
+        return list_trx, hash_list_trx
 
     def get_coin(self,
                  coin_hash: Optional[str] = None,
                  created_trx_hash: Optional[str] = None,
                  trx_hash: Optional[str] = None):
-        assert ((coin_hash is not None) ^ (created_trx_hash is not None) ^ (trx_hash is not None)),  \
+        given = [coin_hash, created_trx_hash, trx_hash]
+        assert sum(value is not None for value in given) == 1,  \
             "Should been passed just (at least) coin_hash or trx_hash to query"
+        q_coins = []
         if coin_hash is not None:
             q_coins = self.db.query("*", self.coins_table_name, [("hash", coin_hash)])
         elif created_trx_hash is not None:
@@ -161,16 +168,13 @@ class DB:
             coin = {
                 "hash": q[0],
                 "created_trx_hash": q[1],
-                "in_index": int(q[2]),
+                "out_index": int(q[2]),
                 "value": int(q[3]),
                 "owner": q[4],
+                "trx_hash": q[5],
+                "in_index": int(q[6]) if q[6] is not None else None,
             }
-            # if coin was spent
-            if q[5]:
-                coin.update({"trx_hash": q[5], "out_index": int(q[6])})
-                coins.insert(coin["out_index"], coin)
-            else:
-                coins.insert(coin["in_index"], coin)
+            coins.insert(coin["out_index"], coin)
         return coins
 
 

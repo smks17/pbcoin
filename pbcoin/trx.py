@@ -120,7 +120,7 @@ class Coin:
         cal_hash = sha256(
             (f"{self.value}{self.owner}{self.created_trx_hash}{self.in_index}").encode()
         ).hexdigest()
-        self.coin_hash = cal_hash
+        self.hash_coin = cal_hash
         return cal_hash
 
     @property

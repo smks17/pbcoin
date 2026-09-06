@@ -11,7 +11,6 @@ from typing import (
 )
 
 import pbcoin.config as conf
-import pbcoin.core as core
 from pbcoin.block import Block, BlockValidationLevel
 from pbcoin.db import DB
 from pbcoin.mempool import Mempool
