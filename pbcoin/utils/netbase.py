@@ -195,7 +195,7 @@ class Connection:
             if flush:
                 await writer.drain()
         except Exception as e:
-            if addr is None:
+            if addr is not None:
                 logging.error(f"Could not write message to {addr}", exc_info=True)
             else:
                 logging.error("Could not write message", exc_info=True)
@@ -222,9 +222,9 @@ class Connection:
             return None
         data = b''
         try:
-            size_data = await reader.read(NETWORK_DATA_SIZE)
+            size_data = await reader.readexactly(NETWORK_DATA_SIZE)
             size_data = int(size_data)
-            data = await reader.read(size_data)
+            data = await reader.readexactly(size_data)
         except Exception:
             if addr is not None:
                 logging.error(f"Could not read message from {addr}", exc_info=True)

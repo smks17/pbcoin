@@ -166,9 +166,12 @@ class Node(Connection):
 
     def close(self):
         """close listening and close all handler tasks"""
+        for task in self.tasks:
+            task.cancel()
+        self.tasks = []
         try:
             self.server.close()
-        except asyncio.CancelledError:
+        except (AttributeError, asyncio.CancelledError):
             pass
 
     async def start_up(self, seeds: List[str], get_blockchain = True, all_output: Optional[ALL_COINS_TYPE] = None) -> None:

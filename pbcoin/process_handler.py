@@ -244,7 +244,7 @@ class ProcessingHandler:
                 if done != BlockValidationLevel.ALL():
                     error = Message(False, Errno.BAD_BLOCK_VALIDATION, peer.addr)
                     error = error.create_data(block_hash=block.__hash__,
-                                              block_height=block.block_height,
+                                              block_index=block.block_height,
                                               validation=done)
                     await node.write(peer.writer, error.create_message(node.addr))
                     logging.debug(f"Bad request mined block from {message.addr.hostname} validation: {done}")
@@ -358,9 +358,7 @@ class ProcessingHandler:
                                 out_coin["created_trx_hash"],
                                 out_coin["value"]))
         time = trx_data['time']
-        new_trx = Trx(self.pbcoin.blockchain.height,
-                      self.pbcoin.wallet.public_key,
-                      inputs, outputs, time)
+        new_trx = Trx(self.pbcoin.blockchain.height, public_key, inputs, outputs, time)
         # add to mempool and send other nodes
         result = self.pbcoin.mempool.add_new_transaction(new_trx,
                                                   sig,

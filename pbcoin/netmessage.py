@@ -110,10 +110,11 @@ class Message:
                     self.data = None
                     pass
                 elif self.type_ == Errno.BAD_BLOCK_VALIDATION:
+                    validation = kwargs["validation"]
                     self.data = {
                         "block_hash": kwargs["block_hash"],
-                        "block_index": kwargs["block_index"],
-                        "validation": kwargs["validation"]
+                        "block_index": kwargs.get("block_index"),
+                        "validation": getattr(validation, "value", validation)
                     }
             elif self.type_ == ConnectionCode.NEW_NEIGHBOR:
                 self.data = {
