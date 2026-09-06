@@ -94,7 +94,7 @@ class Mempool:
         """Removes a list of transaction from mempool and return True if they exist,
         otherwise return False
         """
-        for trx_hash in self.in_mining_transactions:
+        for trx_hash in list(self.in_mining_transactions):
             if trx_hash in list_trx:
                 self.remove_transaction(trx_hash)
 
@@ -119,21 +119,21 @@ class Mempool:
         """the number of all transactions in mempool"""
         return len(self.transactions)
 
-    def __getattr__(self, item: str):
-        assert isinstance(item, str)
-        return deepcopy(self.transactions[item])
+    def __getitem__(self, trx_hash: str) -> Trx:
+        assert isinstance(trx_hash, str)
+        return deepcopy(self.transactions[trx_hash])
 
     def __iter__(self):
         for trx in self.in_mining_transactions:
             yield self.transactions[trx]
 
-    def __contain__(self, key: str | Trx):
+    def __contains__(self, key: str | Trx):
         if isinstance(key, str):
             return key in self.in_mining_transactions
         elif isinstance(key, Trx):
             return key.__hash__ in self.in_mining_transactions
         else:
-            ValueError(f"Not supported {type(key)}")
+            raise ValueError(f"Not supported {type(key)}")
 
     def __repr__(self) -> str:
         return self.transactions.values().__repr__()
